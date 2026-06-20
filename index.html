@@ -4,68 +4,88 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RoofNow — Roof &amp; Wall Measurement</title>
-  <meta name="description" content="Turn a property address into a contractor-grade roof and wall measurement report — areas, pitch, squares, ridge/hip/valley lengths, wall area and openings." />
+  <meta name="description" content="Type a property address and get a contractor-grade roof and wall measurement report — areas, pitch, squares, ridge/hip/valley lengths, wall area and openings." />
   <style>
     :root {
-      --bg: #0f1720;
-      --panel: #16212e;
-      --line: #233140;
-      --ink: #e7eef6;
-      --muted: #9fb0c0;
-      --accent: #ff7a3c;
-      --accent-2: #4cc2ff;
-      --ok: #34d399;
+      --bg: #0f1720; --panel: #16212e; --panel-2: #1b2937; --line: #233140;
+      --ink: #e7eef6; --muted: #9fb0c0; --accent: #ff7a3c; --accent-2: #4cc2ff; --ok: #34d399;
     }
     * { box-sizing: border-box; }
     body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: radial-gradient(1200px 600px at 70% -10%, #1b2a3a 0%, var(--bg) 55%);
-      color: var(--ink);
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
+      color: var(--ink); line-height: 1.6; -webkit-font-smoothing: antialiased; min-height: 100vh;
     }
-    .wrap { max-width: 920px; margin: 0 auto; padding: 0 24px; }
-    header { padding: 80px 0 32px; }
-    .brand {
-      display: inline-flex; align-items: center; gap: 10px;
-      font-weight: 700; letter-spacing: .2px; font-size: 15px; color: var(--muted);
-      text-transform: uppercase;
-    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+    header { padding: 64px 0 8px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
     .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(255,122,60,.15); }
-    h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.05; margin: 22px 0 14px; letter-spacing: -1px; }
+    h1 { font-size: clamp(30px, 5.5vw, 50px); line-height: 1.05; margin: 18px 0 10px; letter-spacing: -1px; }
     h1 .grad { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-    .lede { font-size: clamp(17px, 2.6vw, 21px); color: var(--muted); max-width: 640px; }
-    .tag {
-      display: inline-block; margin-top: 22px; padding: 6px 12px; border: 1px solid var(--line);
-      border-radius: 999px; font-size: 13px; color: var(--muted); background: rgba(255,255,255,.02);
+    .lede { font-size: clamp(16px, 2.4vw, 19px); color: var(--muted); max-width: 620px; }
+
+    .tool { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin: 28px 0 8px; }
+    form { display: flex; gap: 10px; flex-wrap: wrap; }
+    input[type="text"] {
+      flex: 1 1 340px; min-width: 0; padding: 14px 16px; font-size: 16px; color: var(--ink);
+      background: #0b121a; border: 1px solid var(--line); border-radius: 11px; outline: none;
     }
-    .tag b { color: var(--ok); }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 44px 0; }
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
-    .card h3 { margin: 0 0 6px; font-size: 16px; }
-    .card p { margin: 0; color: var(--muted); font-size: 14.5px; }
-    .card .k { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--accent-2); font-weight: 700; }
-    .phases { margin: 40px 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-    .phase { display: grid; grid-template-columns: 92px 1fr auto; gap: 14px; align-items: center; padding: 14px 20px; border-top: 1px solid var(--line); }
-    .phase:first-child { border-top: 0; }
-    .phase .p { font-weight: 700; color: var(--muted); font-size: 13px; }
-    .phase .d { color: var(--ink); font-size: 15px; }
-    .phase .d span { color: var(--muted); font-size: 13.5px; display: block; }
-    .pill { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
-    .pill.done { background: rgba(52,211,153,.14); color: var(--ok); }
-    .pill.prog { background: rgba(76,194,255,.14); color: var(--accent-2); }
-    .pill.todo { background: rgba(159,176,192,.12); color: var(--muted); }
-    pre {
-      background: #0b121a; border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px;
-      overflow-x: auto; font-size: 13.5px; color: #cfe1f2;
+    input[type="text"]:focus { border-color: var(--accent-2); }
+    button {
+      padding: 14px 22px; font-size: 16px; font-weight: 700; color: #0b121a; cursor: pointer;
+      background: linear-gradient(90deg, var(--accent), #ff9a63); border: 0; border-radius: 11px; white-space: nowrap;
     }
-    pre .c { color: #5f7a93; }
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    footer { color: var(--muted); font-size: 13px; padding: 36px 0 60px; border-top: 1px solid var(--line); margin-top: 40px; }
+    button:disabled { opacity: .6; cursor: default; }
+    .examples { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .examples span { font-size: 13px; color: var(--muted); }
+    .chip { font-size: 13px; color: var(--accent-2); background: rgba(76,194,255,.08); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; cursor: pointer; }
+    .chip:hover { background: rgba(76,194,255,.16); }
+
+    .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+    .badge.demo { background: rgba(255,122,60,.16); color: var(--accent); }
+    .badge.live { background: rgba(52,211,153,.16); color: var(--ok); }
+
+    #result { margin: 18px 0 10px; display: none; }
+    #result.show { display: block; }
+    .rhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .rhead h2 { font-size: 19px; margin: 0; }
+    .rhead .sub { color: var(--muted); font-size: 14px; }
+
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .stat { background: var(--panel-2); border: 1px solid var(--line); border-radius: 13px; padding: 16px 18px; }
+    .stat .v { font-size: 26px; font-weight: 800; letter-spacing: -.5px; }
+    .stat .l { font-size: 12.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .stat .v small { font-size: 14px; color: var(--muted); font-weight: 600; }
+
+    .section-title { margin: 28px 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .7px; color: var(--accent-2); font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
+    th, td { text-align: right; padding: 11px 14px; font-size: 14px; border-top: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 12.5px; text-transform: uppercase; letter-spacing: .4px; border-top: 0; background: var(--panel-2); }
+    th:first-child, td:first-child { text-align: left; }
+    .facing { display: inline-block; min-width: 26px; padding: 2px 7px; border-radius: 6px; background: rgba(76,194,255,.1); color: var(--accent-2); font-weight: 700; font-size: 12px; }
+
+    .walls { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; }
+    @media (max-width: 640px) { .walls { grid-template-columns: 1fr; } }
+    .wallcard { background: var(--panel); border: 1px solid var(--line); border-radius: 13px; padding: 18px; }
+    .bar { display: grid; grid-template-columns: 28px 1fr 64px; align-items: center; gap: 10px; margin: 9px 0; }
+    .bar .d { color: var(--muted); font-weight: 700; font-size: 13px; }
+    .bar .track { background: #0b121a; border-radius: 7px; height: 12px; overflow: hidden; }
+    .bar .fill { height: 100%; background: linear-gradient(90deg, var(--accent-2), #6fd3ff); border-radius: 7px; }
+    .bar .n { text-align: right; font-size: 13px; color: var(--ink); }
+    .kv { display: flex; justify-content: space-between; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+    .kv:first-child { border-top: 0; }
+    .kv span:first-child { color: var(--muted); }
+    .kv b { font-weight: 700; }
+
+    .note { font-size: 13px; color: var(--muted); margin-top: 12px; }
+    .err { color: #ff9a9a; background: rgba(255,90,90,.08); border: 1px solid rgba(255,90,90,.25); border-radius: 11px; padding: 12px 14px; margin-top: 14px; display: none; }
+    .err.show { display: block; }
+    .spinner { width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,.35); border-top-color: #0b121a; border-radius: 50%; display: inline-block; vertical-align: -3px; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    footer { color: var(--muted); font-size: 13px; padding: 34px 0 56px; border-top: 1px solid var(--line); margin-top: 36px; }
     a { color: var(--accent-2); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    .note { font-size: 13px; color: var(--muted); margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -73,70 +93,138 @@
     <header>
       <span class="brand"><span class="dot"></span> RoofNow · New Standard Restoration</span>
       <h1>Address in,<br /><span class="grad">measurement report out.</span></h1>
-      <p class="lede">
-        RoofNow turns a property address into a contractor-grade roof &amp; wall
-        report — per-facet area, pitch, azimuth, roofing squares, ridge/hip/valley
-        lengths, plus wall area with window &amp; door openings subtracted.
-      </p>
-      <div><span class="tag">Target accuracy: <b>&lt; 3% area error</b> vs. ground truth</span></div>
+      <p class="lede">Type a property address for a contractor-grade roof &amp; wall report —
+      per-facet area, pitch, squares, and a North/South/East/West wall breakdown with openings.</p>
     </header>
 
-    <section class="grid">
-      <div class="card">
-        <div class="k">Roof</div>
-        <h3>Per-facet geometry</h3>
-        <p>Total area, roofing squares, and each facet's pitch, azimuth, and ridge/hip/valley/eave/rake lengths with a suggested waste factor.</p>
+    <div class="tool">
+      <form id="form" autocomplete="off">
+        <input id="address" type="text" placeholder="e.g. 1600 Pennsylvania Ave NW, Washington DC" aria-label="Property address" />
+        <button id="go" type="submit">Measure roof</button>
+      </form>
+      <div class="examples">
+        <span>Try:</span>
+        <span class="chip" data-a="1600 Pennsylvania Ave NW, Washington DC">1600 Pennsylvania Ave NW</span>
+        <span class="chip" data-a="350 5th Ave, New York NY">350 5th Ave, New York</span>
+        <span class="chip" data-a="1 Infinite Loop, Cupertino CA">1 Infinite Loop, Cupertino</span>
       </div>
-      <div class="card">
-        <div class="k">Walls</div>
-        <h3>Derived elevations</h3>
-        <p>Gross wall area with an N/S/E/W breakdown, gable triangles, and window/door openings subtracted for net siding area.</p>
-      </div>
-      <div class="card">
-        <div class="k">Data paths</div>
-        <h3>Blended &amp; resilient</h3>
-        <p>Google Solar API for instant geometry, USGS 3DEP LiDAR plane-fitting for coverage gaps, and drone photogrammetry for high-value jobs.</p>
-      </div>
-    </section>
+      <div id="err" class="err"></div>
+    </div>
 
-    <section class="phases">
-      <div class="phase">
-        <div class="p">Phase 0</div>
-        <div class="d">Pure measurement engine <span>Formulas + geometry, unit-tested against reference tables</span></div>
-        <span class="pill done">Done</span>
+    <section id="result">
+      <div class="rhead">
+        <h2 id="r-address">—</h2>
+        <span id="r-badge" class="badge demo">Demo data</span>
+        <span id="r-arch" class="sub"></span>
       </div>
-      <div class="phase">
-        <div class="p">Phase 1</div>
-        <div class="d">Google Solar API path <span>Address → engine → JSON / report, with CLI + API</span></div>
-        <span class="pill done">Done</span>
-      </div>
-      <div class="phase">
-        <div class="p">Phase 2</div>
-        <div class="d">LiDAR plane-fit &amp; walls <span>RANSAC facets, N/S/E/W walls, façade homography — core math done</span></div>
-        <span class="pill prog">Core done</span>
-      </div>
-      <div class="phase">
-        <div class="p">Phase 3</div>
-        <div class="d">Drone photogrammetry &amp; ML <span>Imagery-only facet extraction, integrations</span></div>
-        <span class="pill todo">Planned</span>
-      </div>
-    </section>
 
-    <section>
-      <h3>Use it</h3>
-      <pre><code>pip install -e .
+      <div class="stats" id="stats"></div>
 
-# Address in, report out
-roofwall measure "1600 Pennsylvania Ave NW, Washington DC"
-roofwall measure --lat 38.8977 --lng -77.0365 --json</code></pre>
-      <p class="note">RoofNow is a Python CLI &amp; library. This page is a project
-      overview — there is no public measurement endpoint hosted here.</p>
+      <div class="section-title">Roof facets</div>
+      <table>
+        <thead><tr><th>Facet</th><th>Pitch</th><th>Facing</th><th>Sloped ft²</th><th>Squares</th></tr></thead>
+        <tbody id="facets"></tbody>
+      </table>
+
+      <div class="section-title">Walls</div>
+      <div class="walls">
+        <div class="wallcard">
+          <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">Gross area by elevation</div>
+          <div id="wallbars"></div>
+        </div>
+        <div class="wallcard" id="wallkv"></div>
+      </div>
+
+      <p id="r-note" class="note"></p>
     </section>
 
     <footer>
-      RoofNow — internal tooling for New Standard Restoration. Built with the
-      roof &amp; wall measurement engine. &copy; 2026.
+      RoofNow — internal tooling for New Standard Restoration. Reports are produced by the
+      <code>roofwall</code> measurement engine. Demo mode uses representative sample roofs;
+      set <code>GOOGLE_MAPS_API_KEY</code> to enable live Google Solar lookups. &copy; 2026.
     </footer>
   </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const form = $("form"), addr = $("address"), go = $("go");
+    const result = $("result"), errBox = $("err");
+    const fmt = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    const fmt2 = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+    document.querySelectorAll(".chip").forEach((c) =>
+      c.addEventListener("click", () => { addr.value = c.dataset.a; form.requestSubmit(); })
+    );
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const value = addr.value.trim();
+      if (!value) { addr.focus(); return; }
+      errBox.classList.remove("show");
+      go.disabled = true;
+      const label = go.textContent; go.innerHTML = '<span class="spinner"></span>';
+      try {
+        const res = await fetch("/api/measure?address=" + encodeURIComponent(value));
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        render(data);
+      } catch (ex) {
+        errBox.textContent = "Could not measure that address: " + ex.message;
+        errBox.classList.add("show");
+        result.classList.remove("show");
+      } finally {
+        go.disabled = false; go.textContent = label;
+      }
+    });
+
+    function render(d) {
+      $("r-address").textContent = d.address || "Property";
+      const badge = $("r-badge");
+      const live = d.mode === "live";
+      badge.textContent = live ? "Live Solar data" : "Demo data";
+      badge.className = "badge " + (live ? "live" : "demo");
+      $("r-arch").textContent = d.archetype ? "· " + d.archetype : "";
+
+      const r = d.roof;
+      $("stats").innerHTML = [
+        ["Roofing squares", fmt2(r.total_squares), ""],
+        ["Sloped area", fmt(r.total_sloped_sqft), "ft²"],
+        ["Predominant pitch", r.predominant_pitch || "—", ""],
+        ["Squares to order", fmt(r.order_squares), "<small>+" + Math.round(r.waste_pct*100) + "% waste</small>"],
+        ["Facets", r.facet_count, ""],
+        ["Net siding", fmt(d.walls.net_siding_area_sqft), "ft²"],
+      ].map(([l, v, u]) => `<div class="stat"><div class="v">${v} <small>${u||""}</small></div><div class="l">${l}</div></div>`).join("");
+
+      $("facets").innerHTML = d.facets.map((f, i) =>
+        `<tr><td>${i+1}</td><td>${f.pitch}</td><td><span class="facing">${f.facing}</span></td>`+
+        `<td>${fmt(f.sloped_area_sqft)}</td><td>${fmt2(f.squares)}</td></tr>`
+      ).join("");
+
+      const w = d.walls, byd = w.by_direction_sqft;
+      const max = Math.max(...Object.values(byd), 1);
+      const order = ["N", "E", "S", "W"];
+      $("wallbars").innerHTML = order.map((dir) => {
+        const val = byd[dir] || 0;
+        return `<div class="bar"><div class="d">${dir}</div>`+
+          `<div class="track"><div class="fill" style="width:${(val/max*100).toFixed(0)}%"></div></div>`+
+          `<div class="n">${fmt(val)}</div></div>`;
+      }).join("");
+
+      $("wallkv").innerHTML = [
+        ["Eave height", w.eave_height_ft + " ft"],
+        ["Footprint", w.footprint_ft.length + " × " + w.footprint_ft.width + " ft"],
+        ["Gross wall area", fmt(w.gross_wall_area_sqft) + " ft²"],
+        ["Gable area", fmt(w.gable_area_sqft) + " ft²"],
+        ["Openings", "−" + fmt(w.openings_sqft) + " ft²"],
+        ["Net siding (+10% waste)", "<b>" + fmt(w.net_siding_area_sqft) + " ft²</b>"],
+      ].map(([k, v]) => `<div class="kv"><span>${k}</span><span>${v}</span></div>`).join("");
+
+      $("r-note").textContent = d.note ||
+        (live ? "Wall figures are estimated from the roof footprint."
+              : "Representative sample roof — connect a Google Solar API key for live data.");
+      result.classList.add("show");
+      result.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  </script>
 </body>
 </html>
