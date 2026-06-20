@@ -20,6 +20,26 @@ the real `roofwall` engine via a Python serverless function
 
 Frontend is a single static `index.html` (no build step).
 
+### Going live with real Google data
+
+1. Enable the **Solar API** and **Geocoding API** in Google Cloud and create
+   an API key.
+2. In the Vercel project → Settings → Environment Variables, add
+   `GOOGLE_MAPS_API_KEY = <key>` and redeploy. No code change — the app
+   switches from demo to live automatically, and the report badge flips to
+   "Live Solar data". If a lookup fails or has no Solar coverage, it degrades
+   to demo data with a note rather than erroring.
+
+### Rate limiting
+
+`/api/measure` is throttled per client IP (default **30 req/min**, set via
+`RATELIMIT_PER_MIN`; `0` disables). Live mode hits Google's *paid* APIs, so
+the cap protects against cost/abuse; exceeding it returns `429` with a
+`Retry-After` header. The limiter is in-process (per warm serverless
+instance) — a solid first layer; for strict global limits, back
+`roofwall.ratelimit` with Vercel KV / Upstash using the same `check`
+interface (no function changes needed).
+
 ## Why the stack is what it is
 
 Three data paths, blended, built in order:
