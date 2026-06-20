@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "roofwall"
+version = "0.1.0"
+description = "Turn a property address into a contractor-grade roof + wall measurement report."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "New Standard Restoration" }]
+dependencies = [
+    # The measurement engine is pure-stdlib. Everything below powers the
+    # data-source / report layers (Phase 1+). Kept loose on purpose.
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+# Phase 1 — Solar API report rendering
+report = ["reportlab>=4.0"]
+# Phase 2 — LiDAR plane-fit + wall derivation
+lidar = ["numpy>=1.26", "shapely>=2.0", "pyproj>=3.6", "open3d>=0.18", "pdal>=3.4"]
+# Phase 2 — oblique-photo opening rectification
+walls = ["opencv-python>=4.9", "numpy>=1.26"]
+# Phase 1 — API layer
+api = ["fastapi>=0.110", "uvicorn>=0.29"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+roofwall = "roofwall.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["roofwall*"]
+
+[tool.pytest.ini_options]
+testpaths = ["roofwall"]
