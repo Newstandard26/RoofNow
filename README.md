@@ -56,21 +56,32 @@ roofwall/
 |------|-------|--------|
 | 0 | Scaffold + pure measurement engine + unit tests vs. reference tables | ✅ Done |
 | 1 | Solar API client → engine → JSON/text report + CLI + FastAPI | ✅ Done (needs API key & ground-truth tuning) |
-| 2 | LiDAR plane-fit, wall heights/areas, opening rectification, QA flags | 🟡 Engine formulas + QA flag done; data plumbing stubbed |
+| 2 | LiDAR plane-fit, wall heights/areas, opening rectification, QA flags | 🟢 Core math done & tested; only raster/EPT/image **I/O** stubbed |
 | 3 | Drone photogrammetry, ML facet extraction, integrations | ⬜ Not started |
 
-The engine's wall/opening/waste formulas and the low-confidence QA flag are
-implemented and tested; Phase 2's remaining work is the *data plumbing*
-(LiDAR point clouds, DSM/DTM rasters, façade homography) that produces the
-geometry those formulas consume.
+Phase 2's measurement core is implemented in numpy and tested with synthetic
+data:
+- **`sources/lidar.py`** — SVD plane fitting, RANSAC plane segmentation,
+  plane → pitch/azimuth/area, and `facets_from_points()` → `FacetMeasurement`
+  (with a fit-quality confidence that drives the human-QA flag).
+- **`walls/height.py`** — `building_height` (DSM−DTM) and a per-elevation
+  **N/S/E/W** gross-wall breakdown from a footprint + eave height, plus gable
+  triangles → net siding area.
+- **`walls/openings.py`** — a pure-numpy DLT **homography** to rectify an
+  oblique façade photo and measure window/door openings in real feet.
+
+What's left in Phase 2 is only the heavy **I/O at the edges** — reading 3DEP
+EPT point clouds (`pdal`/`open3d`, `lidar-io` extra), sampling DSM/DTM
+rasters (gdal), and warping image pixels (`opencv`, `walls-io` extra). Those
+functions are stubbed with clear errors; the math they feed is done.
 
 ## Quickstart
 
 ```bash
 pip install -e .                       # core (pure-Python engine + Solar client)
-pip install -e '.[report,api,dev]'     # + PDF, FastAPI, pytest
+pip install -e '.[report,api,lidar,walls,dev]'   # + PDF, FastAPI, numpy, pytest
 
-pytest                                 # 70+ engine/source/report tests, no network
+python -m pytest                       # 100+ tests, no network or API key
 
 export GOOGLE_MAPS_API_KEY=...         # never commit this
 roofwall measure "1600 Pennsylvania Ave NW, Washington DC"

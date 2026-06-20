@@ -19,13 +19,17 @@ dependencies = [
 [project.optional-dependencies]
 # Phase 1 — Solar API report rendering
 report = ["reportlab>=4.0"]
-# Phase 2 — LiDAR plane-fit + wall derivation
-lidar = ["numpy>=1.26", "shapely>=2.0", "pyproj>=3.6", "open3d>=0.18", "pdal>=3.4"]
-# Phase 2 — oblique-photo opening rectification
-walls = ["opencv-python>=4.9", "numpy>=1.26"]
+# Phase 2 — LiDAR plane-fit. numpy carries the core math; pdal/open3d are
+# only needed to *read* point clouds (the EPT reader), not to fit planes.
+lidar = ["numpy>=1.26", "shapely>=2.0", "pyproj>=3.6"]
+lidar-io = ["pdal>=3.4", "open3d>=0.18"]
+# Phase 2 — oblique-photo opening rectification. numpy does the homography;
+# opencv is only needed to warp the actual image pixels.
+walls = ["numpy>=1.26"]
+walls-io = ["opencv-python>=4.9"]
 # Phase 1 — API layer
 api = ["fastapi>=0.110", "uvicorn>=0.29"]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "numpy>=1.26"]
 
 [project.scripts]
 roofwall = "roofwall.cli:main"
