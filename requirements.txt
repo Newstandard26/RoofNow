@@ -1,0 +1,3 @@
+# Runtime deps for the Vercel Python serverless function (api/measure.py).
+# Demo mode is pure-stdlib; `requests` is only needed for live Solar lookups.
+requests>=2.31

@@ -7,6 +7,19 @@ wall areas with window/door openings subtracted.
 Target accuracy: **< 3% area error** vs. ground truth (matches EagleView
 ~98.5%).
 
+## Live app
+
+A working web app is deployed on Vercel: type an address and get a roof +
+wall report (facet table, squares, pitch, N/S/E/W wall breakdown). It runs
+the real `roofwall` engine via a Python serverless function
+(`api/measure.py` → `roofwall.app.measure_address`):
+
+- **Demo mode (default):** deterministic sample roofs — usable with no key.
+- **Live mode:** set `GOOGLE_MAPS_API_KEY` in the Vercel project env and it
+  switches to real Google Solar lookups automatically.
+
+Frontend is a single static `index.html` (no build step).
+
 ## Why the stack is what it is
 
 Three data paths, blended, built in order:
