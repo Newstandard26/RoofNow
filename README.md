@@ -90,7 +90,7 @@ roofwall/
 | 0 | Scaffold + pure measurement engine + unit tests vs. reference tables | ✅ Done |
 | 1 | Solar API client → engine → JSON/text report + CLI + FastAPI | ✅ Done (needs API key & ground-truth tuning) |
 | 2 | LiDAR plane-fit, wall heights/areas, opening rectification, QA flags | 🟢 Core math done & tested; only raster/EPT/image **I/O** stubbed |
-| 2.5 | Facet boundary recovery (Solar/LiDAR → facet polygons → live line lengths) | 🟢 Shared-edge **snapping** + `BuildingModel` contract + M1 seam done & tested; raster pipeline (M2) stubbed |
+| 2.5 | Facet boundary recovery (Solar/LiDAR → facet polygons → live line lengths) | 🟢 Snapping + `BuildingModel` + **M2 DSM→polygons engine** (`recover.py`) done & tested via synthetic round-trip; only the live signed-DSM download remains |
 | 3 | Drone photogrammetry, ML facet extraction, integrations | ⬜ Not started |
 
 Phase 2's measurement core is implemented in numpy and tested with synthetic
