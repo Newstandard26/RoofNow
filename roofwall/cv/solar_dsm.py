@@ -106,41 +106,60 @@ def planes_from_building_insights(
 
 
 # --------------------------------------------------------------------------
-# Raster pipeline — stubbed (needs geospatial libs + live downloads)
+# Live DSM download — the only remaining stub. The recovery core (pixel
+# labeling, tracing, regularization, lifting, snapping) lives in recover.py
+# and is validated by the synthetic round-trip test.
 # --------------------------------------------------------------------------
 
 _RASTER_HINT = (
-    "requires rasterio + scikit-image + scipy + shapely and live Solar Data "
-    "Layer downloads; build/run in an environment with those (or a separate "
-    "Cloud Run service) per spec approach A. Not faked."
+    "requires rasterio + the API key and live signed Solar Data Layer URLs "
+    "(which expire ~1h); run where those are available (or a separate Cloud "
+    "Run service) per spec approach A. Not faked."
 )
 
 
+def priors_from_building_insights(
+    payload: dict[str, Any], origin_latlng: tuple[float, float]
+) -> list[dict[str, Any]]:
+    """``recover()`` priors ``[{"id", "abc"}]`` from Solar segments (local feet)."""
+    return [
+        {"id": f"seg{i}", "abc": (p.a, p.b, p.c)}
+        for i, p in enumerate(planes_from_building_insights(payload, origin_latlng))
+    ]
+
+
+def build_model_from_dsm(
+    dsm, mask, transform, priors, origin: Origin, *, notes: Optional[str] = None
+) -> BuildingModel:
+    """Recover facet polygons from a DSM (recover()) and wrap as a BuildingModel."""
+    from roofwall.cv.recover import recover  # lazy: pulls skimage/shapely
+    from roofwall.measurement.snapping import to_roof_edges
+
+    facets = recover(dsm, mask, transform, priors)
+    return BuildingModel.from_edge_facets(
+        to_roof_edges(facets), origin, "solar-dsm", notes
+    )
+
+
 def _download_data_layers(lat: float, lng: float, key: str) -> Any:  # pragma: no cover
-    raise NotImplementedError("dataLayers:get download + GeoTIFF read " + _RASTER_HINT)
-
-
-def _assign_pixels_to_planes(dsm, mask, planes) -> Any:  # pragma: no cover
-    raise NotImplementedError("nearest-plane pixel labeling " + _RASTER_HINT)
-
-
-def _trace_and_regularize(labeled) -> Any:  # pragma: no cover
-    raise NotImplementedError("contour trace + Douglas-Peucker regularize " + _RASTER_HINT)
+    raise NotImplementedError(
+        "Solar dataLayers:get download + GeoTIFF read " + _RASTER_HINT
+    )
 
 
 def build_model_from_solar_dsm(
     lat: float, lng: float, key: str, *, notes: Optional[str] = None
 ) -> BuildingModel:
-    """Full approach-A pipeline. Raises until the raster steps are deployed."""
-    planes = []  # would come from building_insights; see planes_from_building_insights
-    _ = planes
-    layers = _download_data_layers(lat, lng, key)  # noqa: F841 - stub raises
-    raise NotImplementedError(
-        "Solar DSM boundary recovery (M2) is not deployed in this environment. "
-        + _RASTER_HINT
-    )
-    # When implemented:
-    #   labeled = _assign_pixels_to_planes(dsm, mask, planes)
-    #   regions = _trace_and_regularize(labeled)
-    #   facets  = [lift_polygon(r.xy, r.plane) for r in regions]
-    #   return BuildingModel.from_edge_facets(weld(facets), Origin(lat,lng), "solar-dsm", notes)
+    """Full approach-A pipeline.
+
+    The recovery core (``recover()`` — pixel labeling, contour tracing,
+    regularization, lifting, snapping) is implemented and tested via the
+    synthetic round-trip. Only the live signed-DSM **download** remains
+    (needs rasterio + the API key), so this raises there — not faked.
+    """
+    dsm, mask, transform = _download_data_layers(lat, lng, key)  # stub raises here
+    from roofwall.sources.solar import SolarClient
+
+    payload = SolarClient(api_key=key).building_insights(lat, lng)
+    priors = priors_from_building_insights(payload, (lat, lng))
+    return build_model_from_dsm(dsm, mask, transform, priors, Origin(lat, lng), notes=notes)
