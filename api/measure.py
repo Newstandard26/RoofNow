@@ -23,7 +23,7 @@ from urllib.parse import parse_qs, urlparse
 # Make the repo-root `roofwall` package importable from /api.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir))
 
-from roofwall.app import measure_address  # noqa: E402
+from roofwall.app import live_debug, measure_address  # noqa: E402
 from roofwall.ratelimit import FixedWindowRateLimiter  # noqa: E402
 
 # Module-level singleton: persists across invocations on a warm instance.
@@ -77,6 +77,12 @@ class handler(BaseHTTPRequestHandler):
         lat = _first_float(params.get("lat"))
         lng = _first_float(params.get("lng"))
         waste = _first_float(params.get("waste"))
+        debug = (params.get("debug") or [None])[0]
+
+        if debug:
+            # Diagnostics only — hasKey is a boolean, never the key value.
+            self._send(200, live_debug(address=address, lat=lat, lng=lng), rl_headers)
+            return
 
         try:
             result = measure_address(
