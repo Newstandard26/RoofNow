@@ -13,6 +13,7 @@ import hashlib
 from dataclasses import dataclass
 from typing import Any
 
+from roofwall.measurement.edges import gable_roof, hip_roof, line_lengths_dict
 from roofwall.measurement.engine import (
     Pitch,
     measure_facet,
@@ -36,6 +37,8 @@ class Archetype:
     gable_pitch: float
     # openings as (width_ft, height_ft, kind, count)
     openings: tuple[tuple[float, float, str, int], ...]
+    # 3D roof model used for the Length Diagram: "gable" | "hip"
+    roof3d: str
 
 
 ARCHETYPES: tuple[Archetype, ...] = (
@@ -48,6 +51,7 @@ ARCHETYPES: tuple[Archetype, ...] = (
         gable_count=2,
         gable_pitch=6,
         openings=((3, 4, "window", 8), (3, 7, "door", 1), (16, 7, "garage", 1)),
+        roof3d="gable",
     ),
     Archetype(
         name="Hip roof",
@@ -58,6 +62,7 @@ ARCHETYPES: tuple[Archetype, ...] = (
         gable_count=0,
         gable_pitch=5,
         openings=((3, 4, "window", 10), (3, 7, "door", 1), (9, 7, "garage", 1)),
+        roof3d="hip",
     ),
     Archetype(
         name="Complex / cross-gable",
@@ -72,8 +77,16 @@ ARCHETYPES: tuple[Archetype, ...] = (
         gable_count=3,
         gable_pitch=7,
         openings=((3, 4, "window", 12), (3, 7, "door", 2), (16, 7, "garage", 1)),
+        roof3d="hip",
     ),
 )
+
+
+def _roof3d_model(arch: Archetype, length: float, width: float):
+    """Build a 3D facet model for the archetype's Length Diagram."""
+    if arch.roof3d == "gable":
+        return gable_roof(length, width, arch.gable_pitch)
+    return hip_roof(length, width, arch.gable_pitch)
 
 
 def _seed(address: str) -> int:
@@ -134,6 +147,9 @@ def demo_full_report(address: str, *, waste_pct: float | None = None) -> dict[st
         ],
     }
 
+    # --- Length Diagram (ridge/hip/valley/eave/rake) ------------------
+    line_lengths = line_lengths_dict(_roof3d_model(arch, length, width))
+
     return {
         "mode": "demo",
         "address": address,
@@ -141,4 +157,5 @@ def demo_full_report(address: str, *, waste_pct: float | None = None) -> dict[st
         "roof": roof_dict["roof"],
         "facets": roof_dict["facets"],
         "walls": walls,
+        "line_lengths": line_lengths,
     }

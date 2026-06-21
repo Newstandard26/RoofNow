@@ -103,4 +103,7 @@ def _live_report(
         "roof": roof_dict["roof"],
         "facets": roof_dict["facets"],
         "walls": walls,
+        # Solar segments carry no facet polygons, so no Length Diagram yet —
+        # it comes from the LiDAR/3D path that produces 3D facet outlines.
+        "line_lengths": None,
     }

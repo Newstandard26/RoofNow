@@ -12,6 +12,11 @@ def test_demo_report_shape():
     assert len(d["facets"]) >= 2
     assert set(d["walls"]["by_direction_sqft"]) == {"N", "E", "S", "W"}
     assert d["walls"]["net_siding_area_sqft"] > 0
+    # Length Diagram present with at least ridge + eave totals.
+    ll = d["line_lengths"]
+    assert ll["ridge"]["count"] >= 1
+    assert ll["eave"]["length_ft"] > 0
+    assert ll["drip_edge"]["length_ft"] > 0
 
 
 def test_demo_is_deterministic():

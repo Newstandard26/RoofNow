@@ -1,0 +1,14 @@
+{
+  "name": "roofwall-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "TypeScript roof-edge (Length Diagram) module for RoofNow, kept in sync with the Python engine.",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^2.1.8"
+  }
+}

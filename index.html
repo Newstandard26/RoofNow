@@ -126,6 +126,14 @@
         <tbody id="facets"></tbody>
       </table>
 
+      <div id="ll-wrap">
+        <div class="section-title">Length diagram</div>
+        <table>
+          <thead><tr><th>Line type</th><th>Count</th><th>Length (ft)</th></tr></thead>
+          <tbody id="lines"></tbody>
+        </table>
+      </div>
+
       <div class="section-title">Walls</div>
       <div class="walls">
         <div class="wallcard">
@@ -199,6 +207,21 @@
         `<tr><td>${i+1}</td><td>${f.pitch}</td><td><span class="facing">${f.facing}</span></td>`+
         `<td>${fmt(f.sloped_area_sqft)}</td><td>${fmt2(f.squares)}</td></tr>`
       ).join("");
+
+      const llWrap = $("ll-wrap"), ll = d.line_lengths;
+      if (ll) {
+        const order = [["ridge","Ridges"],["hip","Hips"],["valley","Valleys"],["rake","Rakes"],["eave","Eaves"],["junction","Junctions"]];
+        const rows = order.filter(([k]) => ll[k]).map(([k, label]) =>
+          `<tr><td>${label}</td><td>${ll[k].count}</td><td>${fmt(ll[k].length_ft)}</td></tr>`
+        );
+        if (ll.drip_edge) rows.push(
+          `<tr><td style="color:var(--muted)">Drip edge <small>(eaves + rakes)</small></td><td></td><td>${fmt(ll.drip_edge.length_ft)}</td></tr>`
+        );
+        $("lines").innerHTML = rows.join("");
+        llWrap.style.display = "";
+      } else {
+        llWrap.style.display = "none";
+      }
 
       const w = d.walls, byd = w.by_direction_sqft;
       const max = Math.max(...Object.values(byd), 1);
