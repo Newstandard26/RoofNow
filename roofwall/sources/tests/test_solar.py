@@ -9,6 +9,8 @@ from roofwall.sources.solar import (
     CoverageError,
     SolarClient,
     SolarError,
+    imagery_date_iso,
+    imagery_quality,
     parse_building_insights,
     whole_roof_area_sqft,
 )
@@ -99,6 +101,20 @@ def test_client_requires_key():
     client = SolarClient(api_key=None, http_get=lambda *a, **k: {})
     with pytest.raises(SolarError):
         client.building_insights(0, 0)
+
+
+def test_imagery_date_and_quality_parsing():
+    payload = {
+        "imageryDate": {"year": 2023, "month": 6, "day": 5},
+        "imageryQuality": "HIGH",
+    }
+    assert imagery_date_iso(payload) == "2023-06-05"
+    assert imagery_quality(payload) == "HIGH"
+
+
+def test_imagery_date_missing_is_none():
+    assert imagery_date_iso({}) is None
+    assert imagery_quality({}) is None
 
 
 def test_client_404_raises_coverage_error():
