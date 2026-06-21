@@ -265,3 +265,21 @@ def valley_pair() -> List[EdgeFacet]:
         make_facet("A", [p0, p1, (10, 0, 4)]),
         make_facet("B", [p0, (0, 10, 4), p1]),
     ]
+
+
+def cross_gable() -> List[EdgeFacet]:
+    """A watertight T cross-gable: 3 ridges, 2 valleys, 5 eaves, 6 rakes.
+
+    Main gable runs E-W (ridge y=10, z=5); a wing runs N-S (ridge x=20, z=5)
+    over the main's north half, so the two roofs meet along valleys that run
+    from the reentrant corners up to the ridge junction at (20, 10, 5).
+    A canonical fixture for shared-edge snapping (it contains both ridges and
+    valleys that vanish unless facets share exact endpoints).
+    """
+    return [
+        make_facet("main_S", [(0, 0, 0), (40, 0, 0), (40, 10, 5), (20, 10, 5), (0, 10, 5)]),
+        make_facet("main_N_left", [(0, 10, 5), (0, 20, 0), (10, 20, 0), (20, 10, 5)]),
+        make_facet("main_N_right", [(20, 10, 5), (30, 20, 0), (40, 20, 0), (40, 10, 5)]),
+        make_facet("wing_W", [(10, 20, 0), (10, 40, 0), (20, 40, 5), (20, 10, 5)]),
+        make_facet("wing_E", [(30, 20, 0), (30, 40, 0), (20, 40, 5), (20, 10, 5)]),
+    ]
