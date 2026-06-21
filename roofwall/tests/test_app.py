@@ -47,6 +47,79 @@ def test_demo_reason_categorizes_live_failures(monkeypatch, exc, expected):
     assert d["demo_reason"] == expected
 
 
+def test_recover_via_service_ok(monkeypatch):
+    monkeypatch.setenv("ROOFWALL_CV_URL", "https://cv.example.com")
+    from roofwall.app import recover_line_lengths
+
+    def fake_get(url, params):
+        assert url.endswith("/facets")
+        return {"line_lengths": {"ridge": {"count": 1, "length_ft": 16}},
+                "model": {"facets": [1, 2, 3, 4]}}
+
+    ll, status = recover_line_lengths(42.0, -89.0, key="k", http_get=fake_get)
+    assert ll["ridge"]["count"] == 1
+    assert status == "ok:4"
+
+
+def test_recover_via_service_error(monkeypatch):
+    monkeypatch.setenv("ROOFWALL_CV_URL", "https://cv.example.com")
+    from roofwall.app import recover_line_lengths
+
+    def boom(url, params):
+        raise RuntimeError("cv down")
+
+    ll, status = recover_line_lengths(42.0, -89.0, key="k", http_get=boom)
+    assert ll is None
+    assert status.startswith("error:")
+
+
+def test_recover_in_process_is_graceful(monkeypatch):
+    # No service URL -> in-process attempt. Must never raise; with no real
+    # network/key it returns a non-ok status string (deps_missing/no_dsm/error).
+    monkeypatch.delenv("ROOFWALL_CV_URL", raising=False)
+    from roofwall.app import recover_line_lengths
+
+    ll, status = recover_line_lengths(42.0, -89.0, key="bad")
+    assert ll is None
+    assert isinstance(status, str) and not status.startswith("ok")
+
+
+def test_live_report_includes_recovery_status(monkeypatch):
+    monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "k")
+    import roofwall.app as app
+    from roofwall.sources.solar import SolarClient
+
+    payload = {"solarPotential": {"roofSegmentStats": [
+        {"pitchDegrees": 26.57, "azimuthDegrees": 180.0,
+         "stats": {"areaMeters2": 55.9, "groundAreaMeters2": 50.0}}]}}
+    client = SolarClient(api_key="k", http_get=lambda *a, **k: payload)
+    # recovery succeeds (mocked)
+    monkeypatch.setattr(app, "recover_line_lengths",
+                        lambda lat, lng, *, key: ({"ridge": {"count": 3}}, "ok:5"))
+    res = app._live_report("1 A St", 42.0, -89.0, waste_pct=None, key="k", client=client)
+    assert res["recovery_status"] == "ok:5"
+    assert res["line_lengths"]["ridge"]["count"] == 3
+
+
+def test_live_report_degrades_when_recovery_fails(monkeypatch):
+    monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "k")
+    import roofwall.app as app
+    from roofwall.sources.solar import SolarClient
+
+    payload = {"solarPotential": {"roofSegmentStats": [
+        {"pitchDegrees": 26.57, "azimuthDegrees": 180.0,
+         "stats": {"areaMeters2": 55.9, "groundAreaMeters2": 50.0}}]}}
+    client = SolarClient(api_key="k", http_get=lambda *a, **k: payload)
+    monkeypatch.setattr(app, "recover_line_lengths",
+                        lambda lat, lng, *, key: (None, "deps_missing:rasterio"))
+    res = app._live_report("1 A St", 42.0, -89.0, waste_pct=None, key="k", client=client)
+    # Report still renders; failure is visible, not blank.
+    assert res["mode"] == "live"
+    assert res["line_lengths"] is None
+    assert res["recovery_status"] == "deps_missing:rasterio"
+    assert res["roof"]["facet_count"] == 1
+
+
 def test_live_debug_no_key(monkeypatch):
     monkeypatch.delenv("GOOGLE_MAPS_API_KEY", raising=False)
     from roofwall.app import live_debug

@@ -250,9 +250,12 @@
         ["Net siding (+10% waste)", "<b>" + fmt(w.net_siding_area_sqft) + " ft²</b>"],
       ].map(([k, v]) => `<div class="kv"><span>${k}</span><span>${v}</span></div>`).join("");
 
+      const llNote = d.line_lengths ? ""
+        : (d.recovery_status ? " Line lengths unavailable (" + d.recovery_status + ")."
+                             : " Line lengths require the boundary-recovery step.");
       const liveNote = "Roof from Google Solar"
         + (d.imagery_date ? " (imagery " + d.imagery_date + ")" : "")
-        + ". Wall figures are estimated from the roof footprint; line lengths require facet polygons (LiDAR step).";
+        + ". Wall figures are estimated from the roof footprint." + llNote;
       $("r-note").textContent = d.note ||
         (live ? liveNote
               : "Representative sample roof — connect a Google Solar API key for live data.");
