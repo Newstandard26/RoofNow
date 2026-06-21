@@ -23,15 +23,15 @@ report = ["reportlab>=4.0"]
 # only needed to *read* point clouds (the EPT reader), not to fit planes.
 lidar = ["numpy>=1.26", "shapely>=2.0", "pyproj>=3.6"]
 lidar-io = ["pdal>=3.4", "open3d>=0.18"]
-# Phase 2.5 — Solar DSM boundary recovery (recover.py): raster -> polygons.
-cv = ["numpy>=1.26", "scikit-image>=0.22", "shapely>=2.0"]
+# Phase 2.5 — Solar DSM boundary recovery (recover.py + geo.py): raster -> polygons.
+cv = ["numpy>=1.26", "scikit-image>=0.22", "shapely>=2.0", "rasterio>=1.3", "pyproj>=3.6"]
 # Phase 2 — oblique-photo opening rectification. numpy does the homography;
 # opencv is only needed to warp the actual image pixels.
 walls = ["numpy>=1.26"]
 walls-io = ["opencv-python>=4.9"]
 # Phase 1 — API layer
 api = ["fastapi>=0.110", "uvicorn>=0.29"]
-dev = ["pytest>=8.0", "numpy>=1.26", "scikit-image>=0.22", "shapely>=2.0"]
+dev = ["pytest>=8.0", "numpy>=1.26", "scikit-image>=0.22", "shapely>=2.0", "rasterio>=1.3", "pyproj>=3.6"]
 
 [project.scripts]
 roofwall = "roofwall.cli:main"
