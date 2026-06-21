@@ -60,19 +60,33 @@ def _live_report(
     *,
     waste_pct: Optional[float],
     key: str,
+    client: Any = None,
+    geocoder: Any = None,
 ) -> dict[str, Any]:
     """Roof from Google Solar; walls estimated from the roof footprint."""
     from roofwall.sources.geocode import Geocoder
-    from roofwall.sources.solar import SolarClient
+    from roofwall.sources.solar import (
+        SolarClient,
+        imagery_date_iso,
+        imagery_quality,
+        parse_building_insights,
+    )
+
+    if client is None:
+        client = SolarClient(api_key=key)
+    if geocoder is None:
+        geocoder = Geocoder(api_key=key)
 
     formatted = address
     if lat is None or lng is None:
         if not address:
             raise ValueError("address or lat/lng required")
-        geo = Geocoder(api_key=key).geocode(address)
+        geo = geocoder.geocode(address)
         lat, lng, formatted = geo.lat, geo.lng, geo.formatted_address
 
-    report = SolarClient(api_key=key).roof_report(lat, lng, waste_pct=waste_pct)
+    # Raw payload so we can read imagery metadata, then parse to a report.
+    payload = client.building_insights(lat, lng)
+    report = parse_building_insights(payload, waste_pct=waste_pct)
     roof_dict = report_to_dict(report)
 
     # Walls aren't in the Solar response — estimate from the total roof
@@ -96,6 +110,9 @@ def _live_report(
 
     return {
         "mode": "live",
+        "data_source": "Google Solar",
+        "imagery_date": imagery_date_iso(payload),
+        "imagery_quality": imagery_quality(payload),
         "address": formatted or address,
         "lat": lat,
         "lng": lng,

@@ -120,6 +120,26 @@ def whole_roof_area_sqft(payload: dict[str, Any]) -> Optional[float]:
     return sqm_to_sqft(float(area)) if area is not None else None
 
 
+def imagery_date_iso(payload: dict[str, Any]) -> Optional[str]:
+    """Capture date of the imagery behind a buildingInsights response.
+
+    Solar returns ``imageryDate`` as ``{year, month, day}``; we render it as
+    an ISO ``YYYY-MM-DD`` string for display.
+    """
+    d = payload.get("imageryDate") or {}
+    year = d.get("year")
+    if not year:
+        return None
+    month = int(d.get("month") or 1)
+    day = int(d.get("day") or 1)
+    return f"{int(year):04d}-{month:02d}-{day:02d}"
+
+
+def imagery_quality(payload: dict[str, Any]) -> Optional[str]:
+    """Solar ``imageryQuality`` (HIGH / MEDIUM / LOW), if present."""
+    return payload.get("imageryQuality")
+
+
 class SolarClient:
     """Thin HTTP client. The ``http_get`` hook is injectable for tests."""
 

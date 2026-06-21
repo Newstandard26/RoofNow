@@ -148,8 +148,8 @@
 
     <footer>
       RoofNow — internal tooling for New Standard Restoration. Reports are produced by the
-      <code>roofwall</code> measurement engine. Demo mode uses representative sample roofs;
-      set <code>GOOGLE_MAPS_API_KEY</code> to enable live Google Solar lookups. &copy; 2026.
+      <code>roofwall</code> measurement engine. Live roof data comes from Google Solar
+      (server-side); demo mode uses representative sample roofs. &copy; 2026.
     </footer>
   </div>
 
@@ -189,9 +189,12 @@
       $("r-address").textContent = d.address || "Property";
       const badge = $("r-badge");
       const live = d.mode === "live";
-      badge.textContent = live ? "Live Solar data" : "Demo data";
+      badge.textContent = live ? "Live · Google Solar" : "Demo data";
       badge.className = "badge " + (live ? "live" : "demo");
-      $("r-arch").textContent = d.archetype ? "· " + d.archetype : "";
+      const sub = d.archetype
+        ? "· " + d.archetype
+        : (d.imagery_date ? "· Imagery " + d.imagery_date : "");
+      $("r-arch").textContent = sub;
 
       const r = d.roof;
       $("stats").innerHTML = [
@@ -242,8 +245,11 @@
         ["Net siding (+10% waste)", "<b>" + fmt(w.net_siding_area_sqft) + " ft²</b>"],
       ].map(([k, v]) => `<div class="kv"><span>${k}</span><span>${v}</span></div>`).join("");
 
+      const liveNote = "Roof from Google Solar"
+        + (d.imagery_date ? " (imagery " + d.imagery_date + ")" : "")
+        + ". Wall figures are estimated from the roof footprint; line lengths require facet polygons (LiDAR step).";
       $("r-note").textContent = d.note ||
-        (live ? "Wall figures are estimated from the roof footprint."
+        (live ? liveNote
               : "Representative sample roof — connect a Google Solar API key for live data.");
       result.classList.add("show");
       result.scrollIntoView({ behavior: "smooth", block: "start" });
