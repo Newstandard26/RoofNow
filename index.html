@@ -160,12 +160,7 @@
     const fmt = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
     const fmt2 = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
-    document.querySelectorAll(".chip").forEach((c) =>
-      c.addEventListener("click", () => { addr.value = c.dataset.a; form.requestSubmit(); })
-    );
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
+    async function runMeasure() {
       const value = addr.value.trim();
       if (!value) { addr.focus(); return; }
       errBox.classList.remove("show");
@@ -183,7 +178,17 @@
       } finally {
         go.disabled = false; go.textContent = label;
       }
-    });
+    }
+
+    // Enter submits the form; clicking the button fires click. Handle BOTH
+    // explicitly through the same path, each cancelling the native submit so
+    // the page can never navigate/clear the input.
+    form.addEventListener("submit", (e) => { e.preventDefault(); runMeasure(); });
+    go.addEventListener("click", (e) => { e.preventDefault(); runMeasure(); });
+
+    document.querySelectorAll(".chip").forEach((c) =>
+      c.addEventListener("click", () => { addr.value = c.dataset.a; runMeasure(); })
+    );
 
     function render(d) {
       $("r-address").textContent = d.address || "Property";
