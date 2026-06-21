@@ -15,10 +15,14 @@ from __future__ import annotations
 
 import math
 import os
+import re
+import sys
 from typing import Any, Optional
 
 from roofwall.report.render import report_to_dict
 from roofwall.sources.demo import demo_full_report
+from roofwall.sources.geocode import GeocodeError, Geocoder
+from roofwall.sources.solar import CoverageError, SolarClient, SolarError
 from roofwall.walls.height import elevation_breakdown
 
 
@@ -30,6 +34,18 @@ def _label(address: Optional[str], lat: Optional[float], lng: Optional[float]) -
     return "demo property"
 
 
+def _log(msg: str) -> None:
+    """Write to stderr so it surfaces in Vercel function logs (never the key)."""
+    print(f"[api/measure] {msg}", file=sys.stderr)
+
+
+def _demo(label: str, waste_pct: Optional[float], reason: str) -> dict[str, Any]:
+    """Demo report annotated with *why* the live path wasn't used."""
+    result = demo_full_report(label, waste_pct=waste_pct)
+    result["demo_reason"] = reason
+    return result
+
+
 def measure_address(
     address: Optional[str] = None,
     lat: Optional[float] = None,
@@ -38,19 +54,93 @@ def measure_address(
     waste_pct: Optional[float] = None,
     api_key: Optional[str] = None,
 ) -> dict[str, Any]:
-    """Return a full report dict for an address or coordinate."""
+    """Return a full report dict. On any demo fallback, sets ``demo_reason``.
+
+    demo_reason values: ``no_api_key``, ``geocode_failed: <status+msg>``,
+    ``solar_not_covered``, ``solar_error: <status+msg>``, ``exception: <msg>``.
+    The key is never included in any message.
+    """
     key = api_key or os.environ.get("GOOGLE_MAPS_API_KEY")
     label = _label(address, lat, lng)
 
-    if key:
-        try:
-            return _live_report(address, lat, lng, waste_pct=waste_pct, key=key)
-        except Exception as exc:  # noqa: BLE001 - always degrade gracefully
-            result = demo_full_report(label, waste_pct=waste_pct)
-            result["note"] = f"Live lookup unavailable ({exc}); showing demo data."
-            return result
+    if not key:
+        _log("demo fallback: no_api_key")
+        return _demo(label, waste_pct, "no_api_key")
 
-    return demo_full_report(label, waste_pct=waste_pct)
+    try:
+        return _live_report(address, lat, lng, waste_pct=waste_pct, key=key)
+    except GeocodeError as exc:
+        reason = f"geocode_failed: {exc}"
+    except CoverageError:  # subclass of SolarError — must precede it
+        reason = "solar_not_covered"
+    except SolarError as exc:
+        reason = f"solar_error: {exc}"
+    except Exception as exc:  # noqa: BLE001
+        reason = f"exception: {exc}"
+
+    _log(f"live fallback to demo: {reason}")
+    return _demo(label, waste_pct, reason)
+
+
+def _solar_http_status(client: "SolarClient", lat: float, lng: float) -> Optional[int]:
+    """Raw buildingInsights HTTP status (200/404/4xx) without raising."""
+    try:
+        client.building_insights(lat, lng)
+        return 200
+    except CoverageError:
+        return 404
+    except SolarError as exc:
+        m = re.search(r"Solar API (\d+)", str(exc))
+        return int(m.group(1)) if m else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def live_debug(
+    address: Optional[str] = None,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    *,
+    api_key: Optional[str] = None,
+    client: Any = None,
+    geocoder: Any = None,
+) -> dict[str, Any]:
+    """Diagnostics for the live path. Reports hasKey (bool only), the geocoded
+    lat/lng, and the raw Solar HTTP status — never the key itself.
+    """
+    key = api_key or os.environ.get("GOOGLE_MAPS_API_KEY")
+    info: dict[str, Any] = {
+        "hasKey": bool(key),
+        "address": address,
+        "lat": lat,
+        "lng": lng,
+        "geocode": None,
+        "solar_http_status": None,
+        "error": None,
+    }
+    if not key:
+        info["error"] = "no_api_key"
+        return info
+
+    if client is None:
+        client = SolarClient(api_key=key)
+    if geocoder is None:
+        geocoder = Geocoder(api_key=key)
+
+    if lat is None or lng is None:
+        if not address:
+            info["error"] = "no_address_or_latlng"
+            return info
+        try:
+            geo = geocoder.geocode(address)
+            lat, lng = geo.lat, geo.lng
+            info["geocode"] = "ok"
+        except GeocodeError as exc:
+            info["geocode"] = f"failed: {exc}"
+            return info
+    info["lat"], info["lng"] = lat, lng
+    info["solar_http_status"] = _solar_http_status(client, lat, lng)
+    return info
 
 
 def _live_report(

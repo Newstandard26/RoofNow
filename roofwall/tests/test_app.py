@@ -9,9 +9,90 @@ def test_measure_address_demo_without_key(monkeypatch):
     monkeypatch.delenv("GOOGLE_MAPS_API_KEY", raising=False)
     d = measure_address(address="742 Evergreen Terrace")
     assert d["mode"] == "demo"
+    assert d["demo_reason"] == "no_api_key"
     assert d["roof"]["total_squares"] > 0
     assert d["walls"]["net_siding_area_sqft"] > 0
     assert "facets" in d
+
+
+@pytest.mark.parametrize(
+    "exc,expected",
+    [
+        ("GeocodeError:ZERO_RESULTS", "geocode_failed: ZERO_RESULTS"),
+        ("CoverageError", "solar_not_covered"),
+        ("SolarError:Solar API 403: denied", "solar_error: Solar API 403: denied"),
+        ("ValueError:boom", "exception: boom"),
+    ],
+)
+def test_demo_reason_categorizes_live_failures(monkeypatch, exc, expected):
+    monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "k")
+    import roofwall.app as app
+    from roofwall.sources.geocode import GeocodeError
+    from roofwall.sources.solar import CoverageError, SolarError
+
+    kind, _, msg = exc.partition(":")
+    err = {
+        "GeocodeError": GeocodeError,
+        "CoverageError": CoverageError,
+        "SolarError": SolarError,
+        "ValueError": ValueError,
+    }[kind]
+
+    def boom(*a, **k):
+        raise err(msg) if msg else err()
+
+    monkeypatch.setattr(app, "_live_report", boom)
+    d = measure_address(address="anywhere")
+    assert d["mode"] == "demo"
+    assert d["demo_reason"] == expected
+
+
+def test_live_debug_no_key(monkeypatch):
+    monkeypatch.delenv("GOOGLE_MAPS_API_KEY", raising=False)
+    from roofwall.app import live_debug
+
+    info = live_debug(address="1600 Amphitheatre Parkway")
+    assert info["hasKey"] is False
+    assert info["error"] == "no_api_key"
+
+
+def test_live_debug_reports_status_with_injected_clients():
+    from roofwall.app import live_debug
+    from roofwall.sources.geocode import GeocodeResult
+    from roofwall.sources.solar import SolarClient
+
+    payload = {"solarPotential": {"roofSegmentStats": [
+        {"pitchDegrees": 26.57, "azimuthDegrees": 180.0,
+         "stats": {"areaMeters2": 55.9, "groundAreaMeters2": 50.0}}]}}
+
+    class FakeGeo:
+        def geocode(self, address):
+            return GeocodeResult(lat=37.4220, lng=-122.0841, formatted_address=address)
+
+    client = SolarClient(api_key="k", http_get=lambda *a, **k: payload)
+    info = live_debug(address="1600 Amphitheatre Parkway", api_key="k",
+                      client=client, geocoder=FakeGeo())
+    assert info["hasKey"] is True
+    assert info["geocode"] == "ok"
+    assert info["lat"] == pytest.approx(37.4220)
+    assert info["solar_http_status"] == 200
+    # Diagnostics expose hasKey as a boolean, never the key value itself.
+    assert info["hasKey"] in (True, False)
+    assert "api_key" not in info and "key" not in info
+
+
+def test_solar_http_status_maps_errors():
+    from roofwall.app import _solar_http_status
+    from roofwall.sources.solar import CoverageError, SolarClient, SolarError
+
+    def cov(*a, **k):
+        raise CoverageError("no coverage (404)")
+
+    def err(*a, **k):
+        raise SolarError("Solar API 403: PERMISSION_DENIED")
+
+    assert _solar_http_status(SolarClient(api_key="k", http_get=cov), 0, 0) == 404
+    assert _solar_http_status(SolarClient(api_key="k", http_get=err), 0, 0) == 403
 
 
 def test_measure_address_by_latlng_demo(monkeypatch):
@@ -33,7 +114,7 @@ def test_live_failure_degrades_to_demo(monkeypatch):
     monkeypatch.setattr(app, "_live_report", boom)
     d = measure_address(address="123 Anywhere")
     assert d["mode"] == "demo"
-    assert "note" in d and "demo data" in d["note"].lower()
+    assert d["demo_reason"] == "exception: solar down"
 
 
 def test_live_report_surfaces_imagery_date_and_source():
