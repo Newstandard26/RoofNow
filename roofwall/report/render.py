@@ -20,9 +20,18 @@ def azimuth_to_cardinal(azimuth_deg: float) -> str:
 
 
 def report_to_dict(
-    report: RoofReport, *, meta: dict[str, Any] | None = None
+    report: RoofReport,
+    *,
+    meta: dict[str, Any] | None = None,
+    line_lengths: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Convert a report into a plain dict suitable for ``json.dumps``."""
+    """Convert a report into a plain dict suitable for ``json.dumps``.
+
+    ``line_lengths`` is the optional EagleView-style Length Diagram
+    (ridge/hip/valley/eave/rake totals) from
+    :func:`roofwall.measurement.edges.line_lengths_dict`. It's included only
+    when 3D facet geometry was available to derive it.
+    """
     facets = [
         {
             "pitch": f.pitch.label(),
@@ -56,12 +65,29 @@ def report_to_dict(
         },
         "facets": facets,
     }
+    if line_lengths:
+        out["line_lengths"] = line_lengths
     if meta:
         out["meta"] = meta
     return out
 
 
-def report_to_text(report: RoofReport, *, address: str | None = None) -> str:
+_LINE_LABELS = {
+    "ridge": "Ridges",
+    "hip": "Hips",
+    "valley": "Valleys",
+    "rake": "Rakes",
+    "eave": "Eaves",
+    "junction": "Junctions(?)",
+}
+
+
+def report_to_text(
+    report: RoofReport,
+    *,
+    address: str | None = None,
+    line_lengths: dict[str, Any] | None = None,
+) -> str:
     """Render a concise, fixed-width text summary."""
     lines: list[str] = []
     lines.append("=" * 56)
@@ -88,5 +114,18 @@ def report_to_text(report: RoofReport, *, address: str | None = None) -> str:
     if report.facets_needing_qa:
         lines.append("")
         lines.append(f"* {len(report.facets_needing_qa)} facet(s) flagged for human QA (low confidence)")
+    if line_lengths:
+        lines.append("")
+        lines.append("Total Line Lengths (Length Diagram):")
+        for kind in ("ridge", "hip", "valley", "rake", "eave", "junction"):
+            seg = line_lengths.get(kind)
+            if seg:
+                label = _LINE_LABELS[kind]
+                lines.append(
+                    f"  {label:<9}= {seg['length_ft']:>7,.1f} ft  ({seg['count']})"
+                )
+        drip = line_lengths.get("drip_edge")
+        if drip:
+            lines.append(f"  {'Drip edge':<9}= {drip['length_ft']:>7,.1f} ft  (eaves + rakes)")
     lines.append("=" * 56)
     return "\n".join(lines)
