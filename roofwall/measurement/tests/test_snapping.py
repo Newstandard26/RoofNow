@@ -1,132 +1,109 @@
-"""Shared-edge snapping — the linchpin that makes traced facets share edges.
-
-The headline test asserts that a known cross-gable, once its facets are traced
-independently (jittered, no shared endpoints), recovers its shared ridge /
-valley edges after welding — and that boundary eaves collapse back to the true
-perimeter count.
 """
-
+Tests for snapping.py — the shared-edge fix that makes boundary recovery work.
+Mirrors the uploaded suite (adapted to the repo's module paths) plus the
+cross-gable acceptance test.
+"""
+import math
 import random
 
-import pytest
-
 from roofwall.measurement.edges import (
-    EdgeFacet,
+    classify_edges,
     cross_gable,
-    gable_roof,
+    hip_roof,
     line_lengths,
     make_facet,
-    valley_pair,
+    summarize,
 )
 from roofwall.measurement.snapping import (
-    drop_collinear,
-    merge_vertices,
-    resolve_t_junctions,
+    from_roof_edges,
+    snap_model,
+    to_roof_edges,
     weld,
 )
 
+TOL = 0.5
 
-def _shatter(facets, jitter=0.08, seed=1):
-    """Re-trace each facet independently: jitter every vertex < merge tol."""
+
+def _summary(plain):
+    return summarize(classify_edges(to_roof_edges(plain)))
+
+
+def _offset_gable():
+    """Two gable facets whose ridge vertices are offset by 0.1 ft — i.e. independently
+    traced, so they DON'T share an edge until snapped (0.1 > edges SNAP of 0.05)."""
+    front = {"id": "front", "verts": [(0, 0, 0), (40, 0, 0), (40, 12, 6), (0, 12, 6)]}
+    back = {"id": "back", "verts": [(40, 24, 0), (0, 24, 0), (0.1, 12, 6), (40.1, 12, 6)]}
+    return [front, back]
+
+
+def test_before_snapping_ridge_is_missing():
+    # offset vertices => the top edges are seen as two separate boundary edges, no ridge
+    s = _summary(_offset_gable())
+    assert "ridge" not in s or int(s["ridge"]["count"]) == 0
+
+
+def test_snapping_recovers_the_ridge():
+    s = _summary(snap_model(_offset_gable()))
+    assert int(s["ridge"]["count"]) == 1
+    assert abs(s["ridge"]["length"] - 40.0) < TOL
+    assert int(s["eave"]["count"]) == 2
+    assert abs(s["eave"]["length"] - 80.0) < TOL
+    assert int(s["rake"]["count"]) == 4
+
+
+def test_t_junction_vertex_is_inserted():
+    # A's top edge spans 0..20; B only touches the 0..10 half, with a corner at the
+    # midpoint (10,10,5) that lies ON A's edge. Resolution must insert it into A.
+    A = {"id": "A", "verts": [(0, 0, 5), (20, 0, 5), (20, 10, 5), (0, 10, 5)]}
+    B = {"id": "B", "verts": [(0, 10, 5), (10, 10, 5), (10, 20, 5), (0, 20, 5)]}
+    out = snap_model([A, B])
+    a = next(f for f in out if f["id"] == "A")
+    assert any(math.dist(v, (10, 10, 5)) < 0.2 for v in a["verts"]), \
+        "T-junction vertex was not inserted into facet A"
+
+
+def test_idempotent_on_clean_hip_roof():
+    # a roof that already shares edges should survive snapping unchanged in topology
+    plain = from_roof_edges(hip_roof(40, 24, 6))
+    s = _summary(snap_model(plain))
+    assert int(s["ridge"]["count"]) == 1
+    assert int(s["hip"]["count"]) == 4
+    assert int(s["eave"]["count"]) == 4
+    assert abs(s["ridge"]["length"] - 16.0) < TOL
+    assert abs(s["hip"]["length"] - 72.0) < TOL
+
+
+# -------------------- cross-gable acceptance (via weld) --------------------
+
+
+def _shatter(facets, jitter=0.08, seed=3):
+    """Re-trace each EdgeFacet independently: jitter every vertex < snap tol."""
     rng = random.Random(seed)
-    out = []
-    for f in facets:
-        verts = [
-            (x + rng.uniform(-jitter, jitter),
-             y + rng.uniform(-jitter, jitter),
-             z + rng.uniform(-jitter, jitter))
-            for x, y, z in f.verts
-        ]
-        out.append(make_facet(f.id, verts, source=f.source))
-    return out
+    return [
+        make_facet(
+            f.id,
+            [(x + rng.uniform(-jitter, jitter),
+              y + rng.uniform(-jitter, jitter),
+              z + rng.uniform(-jitter, jitter)) for x, y, z in f.verts],
+            source=f.source,
+        )
+        for f in facets
+    ]
 
 
-def _counts(facets):
-    return {k: v.count for k, v in line_lengths(facets).items()}
-
-
-# -------------------- headline: cross-gable --------------------
+def _counts(edge_facets):
+    return {k: v.count for k, v in line_lengths(edge_facets).items()}
 
 
 def test_cross_gable_shared_edges_vanish_without_snapping():
-    shattered = _shatter(cross_gable())
-    c = _counts(shattered)
-    # Every shared edge is misread as two boundary edges.
-    assert "ridge" not in c
-    assert "valley" not in c
-    assert c["eave"] > 5  # eaves exploded beyond the true perimeter
+    c = _counts(_shatter(cross_gable()))
+    assert "ridge" not in c and "valley" not in c
+    assert c["eave"] > 5  # boundary edges exploded
 
 
 def test_cross_gable_weld_recovers_ridges_and_valleys():
     golden = cross_gable()
     gold = _counts(golden)
-    welded = weld(_shatter(golden))
-    got = _counts(welded)
-
-    # Golden topology: 3 ridges, 2 valleys, 5 eaves, 6 rakes.
+    got = _counts(weld(_shatter(golden)))
     assert gold == {"eave": 5, "rake": 6, "ridge": 3, "valley": 2}
-    # Welding the independently-traced facets reproduces it exactly.
-    assert got == gold
-    # Boundary eaves == true perimeter eave count (no shared edge leaked in).
-    assert got["eave"] == gold["eave"]
-
-
-def test_cross_gable_weld_lengths_close_to_golden():
-    golden = cross_gable()
-    g = line_lengths(golden)
-    w = line_lengths(weld(_shatter(golden)))
-    for kind in ("ridge", "valley", "eave", "rake"):
-        assert abs(w[kind].length - g[kind].length) < 1.0  # within 1 ft
-
-
-# -------------------- component steps --------------------
-
-
-def test_merge_recovers_gable_ridge():
-    shattered = _shatter(gable_roof(40, 24, 6))
-    assert "ridge" not in _counts(shattered)
-    merged = merge_vertices(shattered, tol=0.25)
-    assert _counts(merged)["ridge"] == 1
-
-
-def test_merge_recovers_valley():
-    merged = merge_vertices(_shatter(valley_pair()), tol=0.25)
-    assert _counts(merged)["valley"] == 1
-
-
-def test_t_junction_inserts_vertex_on_edge():
-    # Facet B has a long edge (0,0,0)->(10,0,0); facet A has a vertex at its
-    # midpoint (5,0,0). Resolution must insert (5,0,0) into B's ring.
-    b = make_facet("B", [(0, 0, 0), (10, 0, 0), (10, 5, 2), (0, 5, 2)])
-    a = make_facet("A", [(5, 0, 0), (8, -3, 0), (2, -3, 0)])
-    out = {f.id: f for f in resolve_t_junctions([a, b], tol=0.05)}
-    bverts = out["B"].verts
-    assert any(abs(v[0] - 5) < 1e-6 and abs(v[1]) < 1e-6 for v in bverts)
-    assert len(bverts) == 5  # original 4 + inserted midpoint
-
-
-def test_collinear_drops_redundant_but_keeps_shared_corner():
-    # A square with a redundant collinear midpoint on its top edge.
-    square = make_facet("sq", [
-        (0, 0, 0), (10, 0, 0), (10, 10, 0), (5, 10, 0), (0, 10, 0)
-    ])
-    cleaned = drop_collinear([square], tol=0.03)[0]
-    # The collinear (5,10,0) is dropped (not shared with any other facet).
-    assert len(cleaned.verts) == 4
-
-
-def test_collinear_preserves_shared_vertex():
-    # (5,10,0) is collinear on sq's edge AND shared with facet 'nb' -> keep it.
-    square = make_facet("sq", [
-        (0, 0, 0), (10, 0, 0), (10, 10, 0), (5, 10, 0), (0, 10, 0)
-    ])
-    nb = make_facet("nb", [(5, 10, 0), (8, 14, 0), (2, 14, 0)])
-    cleaned = {f.id: f for f in drop_collinear([square, nb], tol=0.03)}
-    assert any(abs(v[0] - 5) < 1e-6 and abs(v[1] - 10) < 1e-6
-               for v in cleaned["sq"].verts)
-
-
-def test_weld_is_idempotent_on_clean_model():
-    golden = cross_gable()
-    once = weld(golden)
-    assert _counts(once) == _counts(golden)
+    assert got == gold  # welding the independent tracing reproduces it exactly

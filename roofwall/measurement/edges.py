@@ -202,6 +202,12 @@ class TypeSummary:
     count: int = 0
     length: float = 0.0
 
+    def __getitem__(self, key: str):
+        # Allow dict-style access (s["ridge"]["count"]) as well as attributes.
+        if key in ("count", "length"):
+            return getattr(self, key)
+        raise KeyError(key)
+
 
 def summarize(edges: List[Edge]) -> Dict[str, TypeSummary]:
     out: Dict[str, TypeSummary] = {}
