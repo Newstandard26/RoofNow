@@ -20,6 +20,7 @@ fabricate line lengths when the data isn't there).
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass
 from typing import Any, List, Optional
 
@@ -182,29 +183,64 @@ def build_model_from_geotiffs(
     return build_model_from_dsm(dsm_ft, mask, transform, priors, origin, notes=notes)
 
 
-def _download_data_layers(lat: float, lng: float, key: str):  # pragma: no cover
+def _fetch_signed(url: str, key: str) -> bytes:
+    """GET a Solar signed Data-Layer URL (key appended) and return the bytes."""
+    import requests
+
+    resp = requests.get(url, params={"key": key}, timeout=60)
+    resp.raise_for_status()
+    return resp.content
+
+
+def _download_data_layers(
+    lat: float, lng: float, key: str, *,
+    radius_m: float = 50.0, client: Any = None, fetch: Any = None
+) -> tuple[str, str]:
     """Fetch Solar ``dataLayers:get`` and download the signed DSM + mask GeoTIFFs.
-    Returns ``(dsm_path, mask_path)``. The ONLY remaining live step."""
-    raise NotImplementedError(
-        "Solar dataLayers:get fetch + signed-URL GeoTIFF download " + _RASTER_HINT
-    )
+
+    Returns ``(dsm_path, mask_path)`` (temp files). Signed URLs expire ~1h, so we
+    download immediately. ``client``/``fetch`` are injectable for tests.
+    """
+    import tempfile
+
+    from roofwall.sources.solar import SolarClient
+
+    client = client or SolarClient(api_key=key)
+    fetch = fetch or _fetch_signed
+    layers = client.data_layers(lat, lng, radius_m)
+    dsm_url, mask_url = layers.get("dsmUrl"), layers.get("maskUrl")
+    if not dsm_url or not mask_url:
+        raise RuntimeError("dataLayers response missing dsmUrl/maskUrl")
+
+    d = tempfile.mkdtemp(prefix="roofwall_dsm_")
+    dsm_path = os.path.join(d, "dsm.tif")
+    mask_path = os.path.join(d, "mask.tif")
+    with open(dsm_path, "wb") as f:
+        f.write(fetch(dsm_url, key))
+    with open(mask_path, "wb") as f:
+        f.write(fetch(mask_url, key))
+    return dsm_path, mask_path
 
 
 def build_model_from_solar_dsm(
-    lat: float, lng: float, key: str, *, notes: Optional[str] = None
+    lat: float, lng: float, key: str, *, notes: Optional[str] = None,
+    client: Any = None, fetch: Any = None
 ) -> BuildingModel:
-    """Full approach-A pipeline.
+    """Full approach-A pipeline: Solar segments + DSM -> facet polygons.
 
-    Everything except the live download is implemented and tested: segment
-    planes (building_insights), CRS->feet (geo), pixel labeling + tracing +
-    snapping (recover). Only ``_download_data_layers`` (the signed-URL HTTP
-    fetch) raises — not faked.
+    Implemented end to end (segment planes, CRS->feet, download, pixel labeling
+    + tracing + snapping). Needs the geospatial deps (~400 MB) + key + outbound
+    network, so it runs in the roofwall-cv service, not the Vercel function.
+    ``client``/``fetch`` are injectable for offline testing.
     """
     from roofwall.sources.solar import SolarClient
 
-    payload = SolarClient(api_key=key).building_insights(lat, lng)
+    client = client or SolarClient(api_key=key)
+    payload = client.building_insights(lat, lng)
     segments = geo_segments(payload)
-    dsm_path, mask_path = _download_data_layers(lat, lng, key)  # stub raises here
+    dsm_path, mask_path = _download_data_layers(
+        lat, lng, key, client=client, fetch=fetch
+    )
     return build_model_from_geotiffs(
         dsm_path, mask_path, segments, Origin(lat, lng), notes=notes
     )

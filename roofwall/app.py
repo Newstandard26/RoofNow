@@ -143,6 +143,66 @@ def live_debug(
     return info
 
 
+def recover_line_lengths(
+    lat: float, lng: float, *, key: str, http_get: Any = None
+) -> tuple[Optional[dict[str, Any]], str]:
+    """Try DSM->polygons recovery -> (line_lengths | None, recovery_status).
+
+    Never raises. recovery_status values:
+      ``ok:<facets>`` | ``deps_missing:<mod>`` | ``no_dsm`` | ``error: <msg>``.
+    If ``ROOFWALL_CV_URL`` is set we call that service (the heavy CV stack can't
+    run in the Vercel function); otherwise we try in-process (works where the
+    geospatial deps + key + network are available).
+    """
+    url = os.environ.get("ROOFWALL_CV_URL")
+    if url:
+        return _recover_via_service(url, lat, lng, http_get=http_get)
+    return _recover_in_process(lat, lng, key)
+
+
+def _recover_via_service(
+    url: str, lat: float, lng: float, *, http_get: Any = None
+) -> tuple[Optional[dict[str, Any]], str]:
+    try:
+        if http_get is None:
+            import requests
+
+            resp = requests.get(
+                url.rstrip("/") + "/facets",
+                params={"lat": lat, "lng": lng},
+                timeout=60,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        else:
+            data = http_get(url.rstrip("/") + "/facets", {"lat": lat, "lng": lng})
+        ll = data.get("line_lengths")
+        if ll:
+            facets = (data.get("model") or {}).get("facets") or []
+            return ll, f"ok:{len(facets)}"
+        return None, data.get("recovery_status") or "no_polygons"
+    except Exception as exc:  # noqa: BLE001
+        return None, f"error: {exc}"
+
+
+def _recover_in_process(
+    lat: float, lng: float, key: str
+) -> tuple[Optional[dict[str, Any]], str]:
+    try:
+        from roofwall.cv.solar_dsm import build_model_from_solar_dsm
+    except Exception as exc:  # noqa: BLE001 - ImportError when CV deps absent
+        mod = getattr(exc, "name", None) or str(exc)
+        return None, f"deps_missing:{mod}"
+    try:
+        model = build_model_from_solar_dsm(lat, lng, key)
+        return model.line_lengths(), f"ok:{len(model.facets)}"
+    except NotImplementedError:
+        return None, "no_dsm"
+    except Exception as exc:  # noqa: BLE001
+        _log(f"recovery error: {exc}")
+        return None, f"error: {exc}"
+
+
 def _live_report(
     address: Optional[str],
     lat: Optional[float],
@@ -198,6 +258,11 @@ def _live_report(
         "openings": [],
     }
 
+    # DSM->polygons recovery (ridge/hip/valley/eave/rake). Never raises; on any
+    # failure line_lengths stays None and recovery_status explains why, so the
+    # report still renders.
+    line_lengths, recovery_status = recover_line_lengths(lat, lng, key=key)
+
     return {
         "mode": "live",
         "data_source": "Google Solar",
@@ -210,7 +275,6 @@ def _live_report(
         "roof": roof_dict["roof"],
         "facets": roof_dict["facets"],
         "walls": walls,
-        # Solar segments carry no facet polygons, so no Length Diagram yet —
-        # it comes from the LiDAR/3D path that produces 3D facet outlines.
-        "line_lengths": None,
+        "line_lengths": line_lengths,
+        "recovery_status": recovery_status,
     }

@@ -90,7 +90,7 @@ roofwall/
 | 0 | Scaffold + pure measurement engine + unit tests vs. reference tables | ✅ Done |
 | 1 | Solar API client → engine → JSON/text report + CLI + FastAPI | ✅ Done (needs API key & ground-truth tuning) |
 | 2 | LiDAR plane-fit, wall heights/areas, opening rectification, QA flags | 🟢 Core math done & tested; only raster/EPT/image **I/O** stubbed |
-| 2.5 | Facet boundary recovery (Solar/LiDAR → facet polygons → live line lengths) | 🟢 Snapping + `BuildingModel` + **DSM→polygons** (`recover.py`) + **CRS→feet** (`geo.py`, sec(lat) fix) done & tested; only the live signed-URL GeoTIFF **download** remains. Needs a separate service (~400 MB deps > Vercel's 250 MB) |
+| 2.5 | Facet boundary recovery (Solar/LiDAR → facet polygons → live line lengths) | 🟢 **End-to-end**: snapping + `BuildingModel` + DSM→polygons + CRS→feet + live download, wired into `/api/measure` with `recovery_status` + graceful degradation. Runs in the `roofwall-cv` service (~400 MB deps > Vercel's 250 MB); set `ROOFWALL_CV_URL` to light it up |
 | 3 | Drone photogrammetry, ML facet extraction, integrations | ⬜ Not started |
 
 Phase 2's measurement core is implemented in numpy and tested with synthetic

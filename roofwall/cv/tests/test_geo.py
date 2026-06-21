@@ -149,6 +149,45 @@ def test_full_real_data_path_roundtrip():
     assert abs(s["eave"]["length"] - 128.0) / 128.0 < 0.10
 
 
+def test_build_model_from_solar_dsm_mocked_google():
+    # Full in-process chain with Google I/O mocked: building_insights +
+    # dataLayers + signed GeoTIFF download -> geo -> recover -> BuildingModel.
+    from roofwall.cv.solar_dsm import build_model_from_solar_dsm
+
+    facets = hip_roof(40, 24, 6)
+    with tempfile.TemporaryDirectory() as d:
+        dsm_path = os.path.join(d, "dsm.tif")
+        mask_path = os.path.join(d, "mask.tif")
+        _write_synthetic_mercator_geotiff(facets, dsm_path, mask_path=mask_path)
+        dsm_bytes = open(dsm_path, "rb").read()
+        mask_bytes = open(mask_path, "rb").read()
+
+        segs = _segments_from_facets(facets)
+        payload = {"solarPotential": {"roofSegmentStats": [
+            {"pitchDegrees": s["pitch_degrees"], "azimuthDegrees": s["azimuth_degrees"],
+             "center": s["center"], "planeHeightAtCenterMeters": s["plane_height_m"]}
+            for s in segs]}}
+
+        class FakeClient:
+            def building_insights(self, lat, lng):
+                return payload
+
+            def data_layers(self, lat, lng, radius_m=50.0):
+                return {"dsmUrl": "http://x/dsm", "maskUrl": "http://x/mask"}
+
+        def fake_fetch(url, key):
+            return dsm_bytes if url.endswith("dsm") else mask_bytes
+
+        model = build_model_from_solar_dsm(
+            LAT0, LON0, "k", client=FakeClient(), fetch=fake_fetch)
+
+    ll = model.line_lengths()
+    assert model.source == "solar-dsm"
+    assert ll["ridge"]["count"] == 1
+    assert ll["hip"]["count"] == 4
+    assert ll["eave"]["count"] == 4
+
+
 def test_geotiffs_to_building_model():
     # DSM + mask GeoTIFFs + Solar segments -> BuildingModel (the production bridge).
     from roofwall.cv.solar_dsm import build_model_from_geotiffs
