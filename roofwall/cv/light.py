@@ -384,6 +384,11 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     labels = assign_pixels(dsm, mask, planes, transform, max_residual=1e9)
     labels = _smooth_labels(labels, len(planes), smooth_iters)
 
+    # Majority-smooth the labels so facets are solid blobs and shared borders are
+    # clean 1-D edges (similar planes otherwise interleave pixel-by-pixel). Keep
+    # the residual cutoff (don't fill the whole mask) so area isn't overcounted.
+    labels = _smooth_labels(labels, len(planes), smooth_iters)
+
     facets = []
     for i, pid in enumerate(ids):
         region = labels == i
