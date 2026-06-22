@@ -147,8 +147,10 @@ def demo_full_report(address: str, *, waste_pct: float | None = None) -> dict[st
         ],
     }
 
-    # --- Length Diagram (ridge/hip/valley/eave/rake) ------------------
-    line_lengths = line_lengths_dict(_roof3d_model(arch, length, width))
+    # --- Length Diagram + roof diagram (from the 3D model) ------------
+    model3d = _roof3d_model(arch, length, width)
+    line_lengths = line_lengths_dict(model3d)
+    from roofwall.report.diagram import from_edge_facets
 
     return {
         "mode": "demo",
@@ -158,4 +160,5 @@ def demo_full_report(address: str, *, waste_pct: float | None = None) -> dict[st
         "facets": roof_dict["facets"],
         "walls": walls,
         "line_lengths": line_lengths,
+        "roof_diagram": from_edge_facets(model3d),
     }
