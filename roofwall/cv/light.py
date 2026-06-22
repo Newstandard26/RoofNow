@@ -440,7 +440,7 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     # weld); imported lazily to avoid a module import cycle.
     from roofwall.cv.lines import measure_lines
     seg_diag: list = []
-    lines = measure_lines(labels, planes, transform, mask, diag=seg_diag)
+    lines = measure_lines(labels, planes, transform, mask, dsm=dsm, diag=seg_diag)
     debug = {
         "n_planes_kept": len(planes),
         "n_facets_traced": len(facets),
