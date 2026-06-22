@@ -84,6 +84,63 @@ def test_recover_in_process_is_graceful(monkeypatch):
     assert isinstance(status, str) and not status.startswith("ok")
 
 
+def test_recover_geometry_in_process_returns_real_diagram(monkeypatch):
+    # Light path returns a model -> geometry payload has real per-facet polys
+    # (not bounding-box rectangles) plus the Length Diagram.
+    pytest.importorskip("contourpy")  # roofwall.cv.light import dep
+    pytest.importorskip("tifffile")
+    monkeypatch.delenv("ROOFWALL_CV_URL", raising=False)
+    import roofwall.app as app
+    from roofwall.measurement.edges import hip_roof
+    from roofwall.model import BuildingModel, Origin
+
+    model = BuildingModel.from_edge_facets(hip_roof(40, 24, 6),
+                                           Origin(42.0, -89.0), "solar-dsm")
+    monkeypatch.setattr("roofwall.cv.light.build_model_light",
+                        lambda lat, lng, key: model)
+    g = app.recover_geometry(42.0, -89.0, key="k")
+    assert g["recovery_status"] == "ok:4"
+    assert len(g["roof_diagram"]) == 4
+    assert all(len(f["poly"]) >= 3 for f in g["roof_diagram"])
+    assert g["line_lengths"]["ridge"]["count"] == 1
+    assert g["line_lengths"]["hip"]["count"] == 4
+
+
+def test_recover_geometry_graceful_on_error(monkeypatch):
+    pytest.importorskip("contourpy")  # roofwall.cv.light import dep
+    pytest.importorskip("tifffile")
+    monkeypatch.delenv("ROOFWALL_CV_URL", raising=False)
+    import roofwall.app as app
+
+    def boom(lat, lng, key):
+        raise RuntimeError("no network")
+
+    monkeypatch.setattr("roofwall.cv.light.build_model_light", boom)
+    g = app.recover_geometry(42.0, -89.0, key="k")
+    assert g["roof_diagram"] is None
+    assert g["line_lengths"] is None
+    assert g["recovery_status"].startswith("error:")
+
+
+def test_recover_geometry_via_service(monkeypatch):
+    monkeypatch.setenv("ROOFWALL_CV_URL", "https://cv.example.com")
+    import roofwall.app as app
+    from roofwall.measurement.edges import hip_roof
+    from roofwall.model import BuildingModel, Origin
+
+    model = BuildingModel.from_edge_facets(hip_roof(40, 24, 6),
+                                           Origin(42.0, -89.0), "solar-dsm")
+
+    def fake_get(url, params):
+        assert url.endswith("/facets")
+        return {"model": model.to_dict(), "line_lengths": model.line_lengths()}
+
+    g = app.recover_geometry(42.0, -89.0, key="k", http_get=fake_get)
+    assert g["recovery_status"] == "ok:4"
+    assert len(g["roof_diagram"]) == 4
+    assert g["line_lengths"]["hip"]["count"] == 4
+
+
 def test_live_report_includes_recovery_status(monkeypatch):
     monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "k")
     import roofwall.app as app

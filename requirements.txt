@@ -1,3 +1,9 @@
-# Runtime deps for the Vercel Python serverless function (api/measure.py).
-# Demo mode is pure-stdlib; `requests` is only needed for live Solar lookups.
+# Runtime deps for the Vercel Python serverless functions.
+# Demo mode (api/measure.py) is pure-stdlib; `requests` is only needed for live
+# Solar lookups. The lightweight DSM recovery (api/recover.py) adds numpy +
+# tifffile (read the Solar GeoTIFFs) + contourpy (trace facet boundaries) — a
+# ~74 MB stack that fits the 250 MB function limit, unlike GDAL/scikit-image.
 requests>=2.31
+numpy>=1.26
+tifffile>=2024.1.30
+contourpy>=1.2

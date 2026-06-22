@@ -224,6 +224,8 @@
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         render(data);
+        if (data.mode === "live" && typeof data.lat === "number")
+          enhanceGeometry(data.lat, data.lng);
       } catch (ex) {
         errBox.textContent = "Could not measure that address: " + ex.message;
         errBox.classList.add("show");
@@ -404,6 +406,46 @@
       wrap.style.display = "";
     }
 
+    function renderLineLengths(ll) {
+      const llWrap = $("ll-wrap");
+      if (ll) {
+        const order = [["ridge","Ridges"],["hip","Hips"],["valley","Valleys"],["rake","Rakes"],["eave","Eaves"],["junction","Junctions"]];
+        const rows = order.filter(([k]) => ll[k]).map(([k, label]) =>
+          `<tr><td>${label}</td><td>${ll[k].count}</td><td>${fmt(ll[k].length_ft)}</td></tr>`
+        );
+        if (ll.drip_edge) rows.push(
+          `<tr><td style="color:var(--muted)">Drip edge <small>(eaves + rakes)</small></td><td></td><td>${fmt(ll.drip_edge.length_ft)}</td></tr>`
+        );
+        $("lines").innerHTML = rows.join("");
+        llWrap.style.display = "";
+      } else {
+        llWrap.style.display = "none";
+      }
+    }
+
+    // Progressive enhancement: the fast /api/measure report shows Solar bounding
+    // boxes; /api/recover runs the real DSM->polygons recovery and we swap in
+    // the true facet outlines + Length Diagram once it returns.
+    async function enhanceGeometry(lat, lng) {
+      const note = $("r-note"), prev = note.textContent;
+      note.textContent = prev + " Refining roof outline…";
+      try {
+        const g = await (await fetch(`/api/recover?lat=${lat}&lng=${lng}`)).json();
+        if (g && g.roof_diagram && g.roof_diagram.length) {
+          renderDiagram(g.roof_diagram);
+          renderLineLengths(g.line_lengths);
+          note.textContent = prev.replace(
+            /Line lengths (unavailable[^.]*|require[^.]*)\.?/,
+            "Roof outline and line lengths from DSM recovery.").trim();
+        } else {
+          note.textContent = prev + (g && g.recovery_status
+            ? " (Detailed outline unavailable: " + g.recovery_status + ".)" : "");
+        }
+      } catch (ex) {
+        note.textContent = prev;  // keep the fast report; enhancement is best-effort
+      }
+    }
+
     function render(d) {
       $("r-address").textContent = d.address || "Property";
       const badge = $("r-badge");
@@ -432,20 +474,7 @@
 
       renderDiagram(d.roof_diagram);
 
-      const llWrap = $("ll-wrap"), ll = d.line_lengths;
-      if (ll) {
-        const order = [["ridge","Ridges"],["hip","Hips"],["valley","Valleys"],["rake","Rakes"],["eave","Eaves"],["junction","Junctions"]];
-        const rows = order.filter(([k]) => ll[k]).map(([k, label]) =>
-          `<tr><td>${label}</td><td>${ll[k].count}</td><td>${fmt(ll[k].length_ft)}</td></tr>`
-        );
-        if (ll.drip_edge) rows.push(
-          `<tr><td style="color:var(--muted)">Drip edge <small>(eaves + rakes)</small></td><td></td><td>${fmt(ll.drip_edge.length_ft)}</td></tr>`
-        );
-        $("lines").innerHTML = rows.join("");
-        llWrap.style.display = "";
-      } else {
-        llWrap.style.display = "none";
-      }
+      renderLineLengths(d.line_lengths);
 
       const w = d.walls, byd = w.by_direction_sqft;
       const max = Math.max(...Object.values(byd), 1);
