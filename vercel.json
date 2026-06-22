@@ -8,5 +8,19 @@
     "api/facets.py": { "includeFiles": "roofwall/**" },
     "api/suggest.py": { "includeFiles": "roofwall/**" },
     "api/config.py": { "includeFiles": "roofwall/**" }
-  }
+  },
+  "headers": [
+    {
+      "source": "/",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, max-age=0, must-revalidate" }
+      ]
+    }
+  ]
 }
