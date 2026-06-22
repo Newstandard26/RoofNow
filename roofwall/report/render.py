@@ -65,6 +65,18 @@ def report_to_dict(
         },
         "facets": facets,
     }
+    # EagleView-style sections (standard pitch, areas-per-pitch, waste table,
+    # structure complexity). Predominant pitch is the standard bin holding the
+    # most area, so 6.4/6.6-degree facets read as a single 6/12.
+    from roofwall.report.eagleview import eagleview_sections
+
+    sections = eagleview_sections(report.facets, report.total_sloped_sqft, line_lengths)
+    if sections["predominant_pitch"]:
+        out["roof"]["predominant_pitch"] = sections["predominant_pitch"]
+    out["roof"]["structure_complexity"] = sections["structure_complexity"]
+    out["roof"]["suggested_waste_pct"] = sections["suggested_waste_pct"]
+    out["areas_per_pitch"] = sections["areas_per_pitch"]
+    out["waste_table"] = sections["waste_table"]
     if line_lengths:
         out["line_lengths"] = line_lengths
     if meta:

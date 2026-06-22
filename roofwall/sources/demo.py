@@ -158,6 +158,8 @@ def demo_full_report(address: str, *, waste_pct: float | None = None) -> dict[st
         "archetype": arch.name,
         "roof": roof_dict["roof"],
         "facets": roof_dict["facets"],
+        "areas_per_pitch": roof_dict.get("areas_per_pitch"),
+        "waste_table": roof_dict.get("waste_table"),
         "walls": walls,
         "line_lengths": line_lengths,
         "roof_diagram": from_edge_facets(model3d),
