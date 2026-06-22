@@ -174,6 +174,59 @@ def _facet_at(px, py, nx, ny, labels, transform, nplanes):
     return -1
 
 
+def _outline_dsm_slope(q0, q1, labels, transform, dsm):
+    """Actual along-edge slope (dz/d_along, ft/ft) read from the DSM.
+
+    The facet-plane slope is unreliable on the outline: a short perimeter run at
+    a corner gets attributed to a steep neighbour (e.g. a N-S segment lands on a
+    North-facing facet and reads as "climbing"), counting a level eave as a rake.
+    The DSM doesn't care about that attribution — we sample the real surface just
+    *inside* the roof and parallel to the edge, so a level eave reads ~0 and only
+    a true gable rake (the surface genuinely climbs along the edge) reads ~pitch.
+    Sampling tangentially + inward avoids the perpendicular cliff at the eave.
+    Returns None (caller falls back to the plane) if too few on-roof samples.
+    """
+    if dsm is None:
+        return None
+    ux, uy = q1[0] - q0[0], q1[1] - q0[1]
+    L = math.hypot(ux, uy)
+    if L == 0:
+        return None
+    nx, ny = -uy / L, ux / L
+    res = transform.res
+
+    def height(x, y):
+        col, row = _world_to_colrow(transform, x, y)
+        c, r = int(round(col)), int(round(row))
+        if 0 <= r < dsm.shape[0] and 0 <= c < dsm.shape[1] and labels[r, c] >= 0:
+            return float(dsm[r, c])
+        return None
+
+    mx, my = q0[0] + ux * 0.5, q0[1] + uy * 0.5
+    plus = sum(height(mx + d * res * nx, my + d * res * ny) is not None for d in (2., 3., 4.))
+    minus = sum(height(mx - d * res * nx, my - d * res * ny) is not None for d in (2., 3., 4.))
+    s_in = 1.0 if plus >= minus else -1.0
+    off = 2.5 * res
+
+    ts, hs = [], []
+    n = max(4, int(L / max(res, 1e-6)))
+    for k in range(n + 1):
+        t = k / n
+        if t < 0.15 or t > 0.85:            # skip the corner-contaminated ends
+            continue
+        h = height(q0[0] + ux * t + s_in * off * nx,
+                   q0[1] + uy * t + s_in * off * ny)
+        if h is not None:
+            ts.append(t * L)
+            hs.append(h)
+    if len(ts) < 4:
+        return None
+    ts = np.asarray(ts)
+    hs = np.asarray(hs)
+    A = np.vstack([ts, np.ones_like(ts)]).T
+    return float(np.linalg.lstsq(A, hs, rcond=None)[0][0])
+
+
 def _split_outline_segment(p0, p1, labels, transform, planes):
     """Split one outline segment into runs of constant bounding facet.
 
@@ -201,10 +254,14 @@ def _split_outline_segment(p0, p1, labels, transform, planes):
             start = k
 
 
-def measure_lines(labels, planes, transform, mask=None, *,
+def measure_lines(labels, planes, transform, mask=None, *, dsm=None,
                   min_shared_px: int = 6, simplify_ft: float = 1.2,
                   min_edge_ft: float = 2.0, diag: list | None = None) -> Dict[str, dict]:
     """Aggregate roof line lengths -> {type: {count, length_ft}} (+ drip_edge).
+
+    Pass `dsm` (height raster, ft) to classify eave vs rake from the real surface
+    slope along each outline edge instead of the bounding facet's plane, which is
+    unreliable at corners; falls back to the plane when no DSM is given.
 
     Pass `diag` (a list) to collect a per-segment breakdown for tuning: each
     entry is a compact dict describing one measured interior or outline segment.
@@ -231,7 +288,8 @@ def measure_lines(labels, planes, transform, mask=None, *,
             if seg_xy < min_edge_ft:
                 continue
             a, b, _c = planes[fi]
-            slope_along = (a * ux + b * uy) / seg_xy
+            dsm_slope = _outline_dsm_slope(q0, q1, labels, transform, dsm)
+            slope_along = dsm_slope if dsm_slope is not None else (a * ux + b * uy) / seg_xy
             length_3d = seg_xy * math.hypot(1.0, slope_along)
             kind = "eave" if abs(slope_along) < _RAKE_SLOPE else "rake"
             acc[kind].append(length_3d)
