@@ -5,6 +5,7 @@
   "functions": {
     "api/measure.py": { "includeFiles": "roofwall/**" },
     "api/facets.py": { "includeFiles": "roofwall/**" },
-    "api/suggest.py": { "includeFiles": "roofwall/**" }
+    "api/suggest.py": { "includeFiles": "roofwall/**" },
+    "api/config.py": { "includeFiles": "roofwall/**" }
   }
 }

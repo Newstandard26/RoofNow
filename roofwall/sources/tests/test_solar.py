@@ -119,6 +119,27 @@ def test_suggest_addresses_parses_results():
     assert out[0]["lat"] == 42.3483 and out[0]["lng"] == -89.0421
 
 
+def test_suggest_addresses_continental_us_only():
+    from roofwall.sources.geocode import suggest_addresses
+
+    captured = {}
+
+    def fake_get(url, params=None, timeout=None):
+        captured.update(params or {})
+        return {"results": [
+            {"formatted_address": "123 Main St, Rockford, IL",
+             "geometry": {"location": {"lat": 42.27, "lng": -89.09}}},
+            {"formatted_address": "Honolulu, HI", "geometry": {"location": {"lat": 21.31, "lng": -157.86}}},
+            {"formatted_address": "Anchorage, AK", "geometry": {"location": {"lat": 61.22, "lng": -149.90}}},
+        ]}
+
+    out = suggest_addresses("123 Main", api_key="k", http_get=fake_get)
+    # request is constrained to the US, and AK/HI are dropped by the CONUS bbox.
+    assert captured.get("components") == "country:US"
+    assert len(out) == 1
+    assert out[0]["description"].startswith("123 Main St, Rockford")
+
+
 def test_suggest_addresses_graceful():
     from roofwall.sources.geocode import suggest_addresses
     # short query, no key, and a throwing http_get all return [] (never raise).
