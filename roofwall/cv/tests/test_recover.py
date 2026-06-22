@@ -77,3 +77,28 @@ def test_dsm_to_building_model_bridge():
     assert ll["ridge"]["count"] == 1
     assert ll["hip"]["count"] == 4
     assert ll["eave"]["count"] == 4
+
+
+def test_assign_pixels_matches_reference_and_bounds_memory():
+    # The incremental assignment must match the old argmin-over-stack result
+    # exactly (first plane wins ties) without allocating the (planes,H,W) stack.
+    import numpy as np
+
+    from roofwall.cv.recover import RasterTransform, assign_pixels
+
+    rng = np.random.default_rng(0)
+    nrows, ncols = 40, 50
+    tf = RasterTransform(x0=0.0, y0=0.0, res=0.5, nrows=nrows)
+    Xg, Yg = tf.grids(ncols)
+    planes = [(0.1, -0.2, 1.0), (-0.3, 0.05, 2.0), (0.0, 0.0, 1.5),
+              (0.2, 0.2, 0.5), (-0.1, -0.1, 3.0)]
+    dsm = (0.2 * Xg - 0.1 * Yg + 1.0) + rng.normal(0, 0.05, (nrows, ncols))
+    mask = np.ones((nrows, ncols), dtype="uint8")
+    mask[:5, :5] = 0
+
+    got = assign_pixels(dsm, mask, planes, tf, max_residual=2.0)
+
+    resid = np.stack([np.abs(a * Xg + b * Yg + c - dsm) for (a, b, c) in planes])
+    ref = np.argmin(resid, axis=0)
+    ref = np.where((mask > 0) & (resid.min(axis=0) <= 2.0), ref, -1)
+    assert np.array_equal(got, ref)
