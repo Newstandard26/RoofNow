@@ -3,8 +3,8 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "functions": {
-    "api/measure.py": {
-      "includeFiles": "roofwall/**"
-    }
+    "api/measure.py": { "includeFiles": "roofwall/**" },
+    "api/facets.py": { "includeFiles": "roofwall/**" },
+    "api/suggest.py": { "includeFiles": "roofwall/**" }
   }
 }
