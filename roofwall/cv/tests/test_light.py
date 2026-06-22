@@ -176,6 +176,41 @@ def test_oversegmented_hip_recovers_clean_facets():
     assert ll["hip"]["count"] == 4
 
 
+def test_noisy_priors_refine_to_clean_facets():
+    # Solar priors are approximate. Perturb pitch/azimuth/height noticeably so a
+    # *fixed* plane only grazes the roof (-> noodly fragments); the EM refit must
+    # still recover the 4 compact hip facets with correct topology.
+    facets = hip_roof(40, 24, 6)
+    dsm_b, mask_b, segs = _synth(facets)
+    rng = np.random.default_rng(7)
+    noisy = []
+    for s in segs:
+        j = dict(s)
+        j["pitchDegrees"] = s["pitchDegrees"] + float(rng.uniform(-3, 3))
+        j["azimuthDegrees"] = s["azimuthDegrees"] + float(rng.uniform(-6, 6))
+        j["planeHeightAtCenterMeters"] = s["planeHeightAtCenterMeters"] + float(
+            rng.uniform(-0.6, 0.6))
+        noisy.append(j)
+    payload = {"solarPotential": {"roofSegmentStats": noisy}}
+
+    class FakeClient:
+        def building_insights(self, lat, lng):
+            return payload
+
+        def data_layers(self, lat, lng, radius_m=50.0):
+            return {"dsmUrl": "http://x/dsm", "maskUrl": "http://x/mask"}
+
+    def fetch(url, key):
+        return dsm_b if url.endswith("dsm") else mask_b
+
+    model = build_model_light(LAT0, LON0, "k", client=FakeClient(), fetch=fetch)
+    assert len(model.facets) == 4
+    ll = model.line_lengths()
+    assert ll["ridge"]["count"] == 1
+    assert ll["hip"]["count"] == 4
+    assert ll["eave"]["count"] == 4
+
+
 def test_light_hip_roundtrip():
     facets = hip_roof(40, 24, 6)
     dsm_b, mask_b, segs = _synth(facets)

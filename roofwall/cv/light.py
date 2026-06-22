@@ -276,19 +276,65 @@ def _merge_priors(priors, *, slope_tol: float = 0.05, z_tol: float = 2.0):
     return merged
 
 
+def _fit_plane(xs: np.ndarray, ys: np.ndarray, zs: np.ndarray):
+    """Least-squares plane z = a*x + b*y + c through (xs, ys, zs) via the 3x3
+    normal equations. Returns (a, b, c) or None if degenerate."""
+    n = xs.size
+    if n < 3:
+        return None
+    Sx, Sy, Sz = xs.sum(), ys.sum(), zs.sum()
+    Sxx, Syy, Sxy = (xs * xs).sum(), (ys * ys).sum(), (xs * ys).sum()
+    Sxz, Syz = (xs * zs).sum(), (ys * zs).sum()
+    M = np.array([[Sxx, Sxy, Sx], [Sxy, Syy, Sy], [Sx, Sy, float(n)]])
+    try:
+        a, b, c = np.linalg.solve(M, np.array([Sxz, Syz, Sz]))
+    except np.linalg.LinAlgError:
+        return None
+    return (float(a), float(b), float(c))
+
+
 def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft=1.0,
-                  snap_tol=1.2, edge_tol=0.9, min_facet_area_px=24):
+                  snap_tol=1.2, edge_tol=0.9, min_facet_area_px=24, refine_iters=4):
+    """DSM + Solar plane priors -> snapped facet polygons.
+
+    The Solar priors are only an initialization: their pitch/azimuth/height are
+    approximate, so a fixed plane only grazes the real roof in a thin band (the
+    cause of the noodly, fragmented facets). We refine with a few EM passes —
+    assign pixels to the nearest plane, refit each plane by least squares to its
+    pixels, re-merge any planes that converge together — so the planes settle
+    onto the true roof surfaces and each facet fills in as a compact region.
+    """
     priors = _merge_priors(priors)
     planes = [p["abc"] for p in priors]
+    ids = [p["id"] for p in priors]
+    nrows, ncols = dsm.shape
+    Xg, Yg = transform.grids(ncols)
+
+    for _ in range(max(0, refine_iters)):
+        labels = assign_pixels(dsm, mask, planes, transform, max_residual)
+        refit = []
+        for i, pl in enumerate(planes):
+            reg = labels == i
+            fit = _fit_plane(Xg[reg], Yg[reg], dsm[reg]) if reg.any() else None
+            refit.append(fit or pl)
+        # Planes for one physical surface converge together — collapse them so
+        # they don't re-fragment the facet on the next assignment.
+        deduped = _merge_priors([{"id": ids[i], "abc": refit[i]}
+                                 for i in range(len(refit))])
+        new_planes = [d["abc"] for d in deduped]
+        if new_planes == planes:
+            break
+        planes, ids = new_planes, [d["id"] for d in deduped]
+
     labels = assign_pixels(dsm, mask, planes, transform, max_residual)
     facets = []
-    for i, prior in enumerate(priors):
+    for i, pid in enumerate(ids):
         region = labels == i
         if int(region.sum()) < min_facet_area_px:
             continue
         verts = _trace_region(region, planes[i], transform, simplify_ft)
         if len(verts) >= 3:
-            facets.append({"id": prior["id"], "verts": verts})
+            facets.append({"id": pid, "verts": verts})
     return snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
 
 
