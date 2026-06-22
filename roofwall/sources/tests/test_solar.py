@@ -103,6 +103,34 @@ def test_client_requires_key():
         client.building_insights(0, 0)
 
 
+def test_suggest_addresses_parses_results():
+    from roofwall.sources.geocode import suggest_addresses
+
+    payload = {"status": "OK", "results": [
+        {"formatted_address": "8656 Scott Ln, Machesney Park, IL 61115, USA",
+         "geometry": {"location": {"lat": 42.3483, "lng": -89.0421}}, "place_id": "abc"},
+        {"formatted_address": "8656 Scott Ln, Somewhere Else",
+         "geometry": {"location": {"lat": 40.0, "lng": -80.0}}, "place_id": "def"},
+    ]}
+    out = suggest_addresses("8656 Scott", api_key="k",
+                            http_get=lambda url, params=None, timeout=None: payload)
+    assert len(out) == 2
+    assert out[0]["description"].startswith("8656 Scott Ln, Machesney Park")
+    assert out[0]["lat"] == 42.3483 and out[0]["lng"] == -89.0421
+
+
+def test_suggest_addresses_graceful():
+    from roofwall.sources.geocode import suggest_addresses
+    # short query, no key, and a throwing http_get all return [] (never raise).
+    assert suggest_addresses("ab", api_key="k") == []
+    assert suggest_addresses("123 Main St", api_key=None) == []
+
+    def boom(*a, **k):
+        raise RuntimeError("down")
+
+    assert suggest_addresses("123 Main St", api_key="k", http_get=boom) == []
+
+
 def test_imagery_date_and_quality_parsing():
     payload = {
         "imageryDate": {"year": 2023, "month": 6, "day": 5},
