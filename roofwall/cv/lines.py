@@ -102,7 +102,7 @@ def _convex_at(mx, my, i_idx, j_idx, pi, pj, nx, ny, labels, transform):
 
 
 def _interior_segments(i_idx, j_idx, planes, labels, transform, pts_world, *,
-                       gap_ft=2.5, min_len_ft=4.0, max_perp_ft=4.0):
+                       gap_ft=2.5, min_len_ft=3.0, max_perp_ft=4.0):
     """Shared edge(s) of facets i,j -> list of (kind, length_ft).
 
     Projects the shared-border pixels onto the planes' intersection line, then
