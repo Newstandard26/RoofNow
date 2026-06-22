@@ -188,12 +188,18 @@ def _recover_via_service(
 def _recover_in_process(
     lat: float, lng: float, key: str
 ) -> tuple[Optional[dict[str, Any]], str]:
+    # Check the heavy geospatial deps are present BEFORE doing any work. On the
+    # Vercel function they're absent, so we must NOT download the DSM only to
+    # fail on the missing lib — that wasted a paid dataLayers call + seconds of
+    # latency on every live measure. Short-circuit fast and cheap.
+    import importlib.util
+
+    for mod in ("numpy", "rasterio", "pyproj", "skimage", "shapely"):
+        if importlib.util.find_spec(mod) is None:
+            return None, f"deps_missing:{mod}"
     try:
         from roofwall.cv.solar_dsm import build_model_from_solar_dsm
-    except Exception as exc:  # noqa: BLE001 - ImportError when CV deps absent
-        mod = getattr(exc, "name", None) or str(exc)
-        return None, f"deps_missing:{mod}"
-    try:
+
         model = build_model_from_solar_dsm(lat, lng, key)
         return model.line_lengths(), f"ok:{len(model.facets)}"
     except NotImplementedError:
