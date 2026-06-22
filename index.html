@@ -86,7 +86,27 @@
     footer { color: var(--muted); font-size: 13px; padding: 34px 0 56px; border-top: 1px solid var(--line); margin-top: 36px; }
     a { color: var(--accent-2); text-decoration: none; }
     a:hover { text-decoration: underline; }
+
+    /* address type-ahead + verify map */
+    .field { position: relative; flex: 1 1 340px; min-width: 0; }
+    .field input[type="text"] { width: 100%; }
+    .suggest { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 40;
+      background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px; overflow: hidden; display: none;
+      box-shadow: 0 12px 30px rgba(0,0,0,.35); }
+    .suggest.show { display: block; }
+    .suggest-item { padding: 11px 14px; font-size: 14px; color: var(--ink); cursor: pointer; border-top: 1px solid var(--line); }
+    .suggest-item:first-child { border-top: 0; }
+    .suggest-item:hover, .suggest-item.active { background: rgba(76,194,255,.14); }
+    .verify { margin-top: 16px; display: none; }
+    .verify.show { display: block; }
+    .map { height: 320px; border-radius: 13px; overflow: hidden; border: 1px solid var(--line); }
+    .maphint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+    .leaflet-container { background: #0b121a; font: inherit; }
   </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body>
   <div class="wrap">
@@ -99,7 +119,11 @@
 
     <div class="tool">
       <form id="form" autocomplete="off">
-        <input id="address" type="text" placeholder="e.g. 1600 Pennsylvania Ave NW, Washington DC" aria-label="Property address" />
+        <div class="field">
+          <input id="address" type="text" autocomplete="off" spellcheck="false"
+            placeholder="Start typing a property address…" aria-label="Property address" />
+          <div id="suggest" class="suggest" role="listbox"></div>
+        </div>
         <button id="go" type="submit">Measure roof</button>
       </form>
       <div class="examples">
@@ -107,6 +131,10 @@
         <span class="chip" data-a="1600 Pennsylvania Ave NW, Washington DC">1600 Pennsylvania Ave NW</span>
         <span class="chip" data-a="350 5th Ave, New York NY">350 5th Ave, New York</span>
         <span class="chip" data-a="1 Infinite Loop, Cupertino CA">1 Infinite Loop, Cupertino</span>
+      </div>
+      <div id="verify" class="verify">
+        <div id="map" class="map"></div>
+        <div class="maphint">Drag the pin onto your building to confirm it's the right structure, then <b>Measure roof</b>.</div>
       </div>
       <div id="err" class="err"></div>
     </div>
@@ -160,14 +188,20 @@
     const fmt = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
     const fmt2 = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
+    let selectedLoc = null;  // {lat, lng, description} once a suggestion/pin is confirmed
+
     async function runMeasure() {
       const value = addr.value.trim();
-      if (!value) { addr.focus(); return; }
+      if (!value && !selectedLoc) { addr.focus(); return; }
+      hideSuggest();
       errBox.classList.remove("show");
       go.disabled = true;
       const label = go.textContent; go.innerHTML = '<span class="spinner"></span>';
       try {
-        const res = await fetch("/api/measure?address=" + encodeURIComponent(value));
+        const url = selectedLoc
+          ? `/api/measure?lat=${selectedLoc.lat}&lng=${selectedLoc.lng}&address=${encodeURIComponent(selectedLoc.description || value)}`
+          : "/api/measure?address=" + encodeURIComponent(value);
+        const res = await fetch(url);
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         render(data);
@@ -187,8 +221,82 @@
     go.addEventListener("click", (e) => { e.preventDefault(); runMeasure(); });
 
     document.querySelectorAll(".chip").forEach((c) =>
-      c.addEventListener("click", () => { addr.value = c.dataset.a; runMeasure(); })
+      c.addEventListener("click", () => { addr.value = c.dataset.a; selectedLoc = null; runMeasure(); })
     );
+
+    // ---------- address type-ahead ----------
+    const suggestBox = $("suggest");
+    let suggestTimer = null;
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
+
+    addr.addEventListener("input", () => {
+      selectedLoc = null;                 // editing invalidates a prior pick
+      const q = addr.value.trim();
+      clearTimeout(suggestTimer);
+      if (q.length < 3) { hideSuggest(); return; }
+      suggestTimer = setTimeout(() => fetchSuggest(q), 300);
+    });
+
+    addr.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && suggestBox.classList.contains("show") && suggestBox.firstElementChild) {
+        e.preventDefault(); e.stopPropagation();       // pick the top suggestion first
+        suggestBox.firstElementChild.click();
+      } else if (e.key === "Escape") { hideSuggest(); }
+    });
+
+    document.addEventListener("click", (e) => {
+      if (e.target !== addr && !suggestBox.contains(e.target)) hideSuggest();
+    });
+
+    async function fetchSuggest(q) {
+      try {
+        const res = await fetch("/api/suggest?q=" + encodeURIComponent(q));
+        const data = await res.json();
+        renderSuggest(data.suggestions || []);
+      } catch { hideSuggest(); }
+    }
+
+    function renderSuggest(items) {
+      if (!items.length) { hideSuggest(); return; }
+      suggestBox.innerHTML = items.map((s) =>
+        `<div class="suggest-item" role="option">${esc(s.description)}</div>`).join("");
+      [...suggestBox.children].forEach((el, i) =>
+        el.addEventListener("click", () => chooseSuggestion(items[i])));
+      suggestBox.classList.add("show");
+    }
+
+    function hideSuggest() { suggestBox.classList.remove("show"); suggestBox.innerHTML = ""; }
+
+    function chooseSuggestion(s) {
+      selectedLoc = { lat: s.lat, lng: s.lng, description: s.description };
+      addr.value = s.description;
+      hideSuggest();
+      showMap(s.lat, s.lng);
+    }
+
+    // ---------- verify map (keyless satellite imagery) ----------
+    let map = null, marker = null;
+    function showMap(lat, lng) {
+      const verify = $("verify");
+      verify.classList.add("show");
+      if (!map) {
+        map = L.map("map", { zoomControl: true });
+        L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          { maxZoom: 21, attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics" }).addTo(map);
+      }
+      map.setView([lat, lng], 20);
+      if (!marker) {
+        marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+        marker.on("dragend", () => {
+          const p = marker.getLatLng();
+          selectedLoc = { lat: p.lat, lng: p.lng, description: (selectedLoc && selectedLoc.description) || addr.value.trim() };
+        });
+      } else {
+        marker.setLatLng([lat, lng]);
+      }
+      setTimeout(() => map.invalidateSize(), 60);   // the map was display:none until now
+      verify.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
 
     function render(d) {
       $("r-address").textContent = d.address || "Property";
@@ -259,6 +367,8 @@
       $("r-note").textContent = d.note ||
         (live ? liveNote
               : "Representative sample roof — connect a Google Solar API key for live data.");
+      // Show the building on the map for the measured location (live results).
+      if (typeof d.lat === "number" && typeof d.lng === "number") showMap(d.lat, d.lng);
       result.classList.add("show");
       result.scrollIntoView({ behavior: "smooth", block: "start" });
     }

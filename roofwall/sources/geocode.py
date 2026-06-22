@@ -12,6 +12,50 @@ from typing import Any, Callable, Optional
 GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 
 
+def suggest_addresses(
+    query: str,
+    *,
+    api_key: Optional[str] = None,
+    limit: int = 5,
+    http_get: Optional[Callable[..., Any]] = None,
+    timeout: int = 15,
+) -> list[dict]:
+    """Address candidates for a typed query, via Google Geocoding.
+
+    Returns ``[{description, lat, lng, place_id}, ...]`` (server-side; the key
+    never reaches the browser). Degrades to ``[]`` on any error or missing key,
+    so the type-ahead never breaks the page.
+    """
+    key = api_key or os.environ.get("GOOGLE_MAPS_API_KEY")
+    if not key or not query or len(query.strip()) < 3:
+        return []
+    params = {"address": query, "key": key}
+    try:
+        if http_get is not None:
+            data = http_get(GEOCODE_URL, params=params, timeout=timeout)
+        else:
+            import requests
+
+            resp = requests.get(GEOCODE_URL, params=params, timeout=timeout)
+            if resp.status_code != 200:
+                return []
+            data = resp.json()
+    except Exception:  # noqa: BLE001 - suggestions are best-effort
+        return []
+
+    out: list[dict] = []
+    for r in (data.get("results") or [])[:limit]:
+        loc = (r.get("geometry") or {}).get("location") or {}
+        if "lat" in loc and "lng" in loc:
+            out.append({
+                "description": r.get("formatted_address", query),
+                "lat": float(loc["lat"]),
+                "lng": float(loc["lng"]),
+                "place_id": r.get("place_id"),
+            })
+    return out
+
+
 class GeocodeError(RuntimeError):
     """Geocoding failed or returned no result."""
 
