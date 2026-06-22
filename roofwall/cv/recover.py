@@ -86,17 +86,24 @@ def plane_z(p: ABC, x: float, y: float) -> float:
 # ---------- step 2: assign pixels to planes ----------
 def assign_pixels(dsm: np.ndarray, mask: np.ndarray, planes: List[ABC],
                   transform: RasterTransform, max_residual: float = 2.0) -> np.ndarray:
-    """Return an int label array: index of best-fit plane per pixel, -1 where unassigned."""
+    """Return an int label array: index of best-fit plane per pixel, -1 where unassigned.
+
+    Computes the best plane incrementally (one residual grid at a time) instead
+    of materializing a (planes, rows, cols) stack — that stack is ~750 MB for a
+    93-plane building on a 1k x 1k DSM and OOM-kills the serverless function.
+    Memory here is O(rows*cols); results match the argmin-over-stack version
+    (first plane wins ties).
+    """
     nrows, ncols = dsm.shape
     Xg, Yg = transform.grids(ncols)
-    resid = np.full((len(planes), nrows, ncols), np.inf, dtype=float)
+    best = np.full((nrows, ncols), np.inf, dtype=float)
+    labels = np.full((nrows, ncols), -1, dtype=int)
     for i, (a, b, c) in enumerate(planes):
-        pred = a * Xg + b * Yg + c
-        resid[i] = np.abs(pred - dsm)
-    labels = np.argmin(resid, axis=0)
-    best = np.min(resid, axis=0)
-    labels = np.where(mask > 0, labels, -1)
-    labels = np.where(best <= max_residual, labels, -1)
+        resid = np.abs(a * Xg + b * Yg + c - dsm)
+        better = resid < best
+        best = np.where(better, resid, best)
+        labels = np.where(better, i, labels)
+    labels = np.where((mask > 0) & (best <= max_residual), labels, -1)
     return labels.astype(int)
 
 
