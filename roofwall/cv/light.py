@@ -365,7 +365,7 @@ def _smooth_labels(labels, nplanes, iters=2):
 def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft=1.8,
                   snap_tol=2.5, edge_tol=1.5, min_facet_area_px=24,
                   min_facet_area_sqft=25.0, min_keep_sqft=40.0, refine_iters=4,
-                  smooth_iters=2):
+                  smooth_iters=4):
     """DSM + Solar plane priors -> snapped facet polygons.
 
     The Solar priors are only an initialization: their pitch/azimuth/height are
@@ -434,7 +434,8 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     # Line lengths from the plane geometry (accurate even when facets don't
     # weld); imported lazily to avoid a module import cycle.
     from roofwall.cv.lines import measure_lines
-    lines = measure_lines(labels, planes, transform, mask)
+    seg_diag: list = []
+    lines = measure_lines(labels, planes, transform, mask, diag=seg_diag)
     debug = {
         "n_planes_kept": len(planes),
         "n_facets_traced": len(facets),
@@ -445,6 +446,8 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         "facet_areas_sqft": sorted(
             (round(float(int((labels == i).sum()) * res2), 1) for i in range(len(planes))),
             reverse=True),
+        "planes_abc": [[round(p[0], 3), round(p[1], 3), round(p[2], 1)] for p in planes],
+        "segs": seg_diag,
     }
     return snapped, lines, debug
 
