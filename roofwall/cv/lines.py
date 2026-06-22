@@ -24,7 +24,9 @@ from contourpy import contour_generator
 from roofwall.cv.light import _dp
 from roofwall.cv.recover import RasterTransform, plane_z
 
-_FLAT_SLOPE = 0.09          # |dz/dxy| below this is "level" (~5 deg)
+_FLAT_SLOPE = 0.06          # |dz/dxy| below this is "level" (~3.4 deg): a ridge
+                            # runs level (~0) while a hip climbs along the edge,
+                            # so a slightly skew-fit hip shouldn't read as a ridge
 _FLAT_VALLEY = 0.05         # a level interior edge is a ridge unless concave
 _RAKE_SLOPE = 0.25          # outline: only call it a rake if the facet really
                             # climbs along the edge (~14 deg). Below this it's an
@@ -144,7 +146,7 @@ def _interior_segments(i_idx, j_idx, planes, labels, transform, pts_world, *,
             convex = _convex_at(float(xs[run].mean()), float(ys[run].mean()),
                                 i_idx, j_idx, pi, pj, nx, ny, labels, transform)
             kind = ("ridge" if level else "hip") if convex else "valley"
-            segs.append((kind, length_xy * factor))
+            segs.append((kind, length_xy * factor, slope_along))
     return segs
 
 
@@ -259,7 +261,7 @@ def _split_outline_segment(p0, p1, labels, transform, planes):
 
 
 def measure_lines(labels, planes, transform, mask=None, *, dsm=None,
-                  min_shared_px: int = 6, simplify_ft: float = 1.2,
+                  min_shared_px: int = 6, simplify_ft: float = 0.9,
                   min_edge_ft: float = 2.0, diag: list | None = None) -> Dict[str, dict]:
     """Aggregate roof line lengths -> {type: {count, length_ft}} (+ drip_edge).
 
@@ -278,10 +280,11 @@ def measure_lines(labels, planes, transform, mask=None, *, dsm=None,
         if len(px_pts) < min_shared_px or i >= len(planes) or j >= len(planes):
             continue
         world = [transform.colrow_to_world(c, r) for c, r in px_pts]
-        for kind, length in _interior_segments(i, j, planes, labels, transform, world):
+        for kind, length, slope in _interior_segments(i, j, planes, labels, transform, world):
             acc[kind].append(length)
             if diag is not None:
-                diag.append({"e": "int", "ij": [i, j], "k": kind, "L": round(length, 1)})
+                diag.append({"e": "int", "ij": [i, j], "k": kind,
+                             "L": round(length, 1), "s": round(slope, 2)})
 
     for p0, p1 in _outline_segments(labels, transform, simplify_ft):
         for q0, q1, fi in _split_outline_segment(p0, p1, labels, transform, planes):
