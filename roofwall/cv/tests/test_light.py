@@ -128,6 +128,54 @@ def test_projector_rejects_unknown_crs():
         _projector(2193)  # NZ Transverse Mercator — not supported
 
 
+def test_merge_priors_collapses_near_duplicates():
+    from roofwall.cv.light import _merge_priors
+
+    base = (0.30, -0.10, 12.0)
+    priors = [
+        {"id": "a", "abc": base},
+        {"id": "b", "abc": (0.31, -0.09, 12.3)},   # near-duplicate of a -> merged
+        {"id": "c", "abc": (-0.30, 0.10, 11.5)},   # different plane
+        {"id": "d", "abc": (0.30, -0.10, 22.0)},   # same slope, +10 ft -> distinct
+    ]
+    merged = _merge_priors(priors)
+    assert len(merged) == 3
+    assert merged[0]["id"] == "a"  # first of the merged pair is kept
+
+
+def test_oversegmented_hip_recovers_clean_facets():
+    # Reproduce Google Solar over-segmentation: triple each segment with small
+    # pitch/azimuth jitter. Without prior-merging these near-duplicate planes
+    # fragment the facets; with it we still recover the 4 clean hip facets.
+    facets = hip_roof(40, 24, 6)
+    dsm_b, mask_b, segs = _synth(facets)
+    rng = np.random.default_rng(1)
+    over = []
+    for s in segs:
+        for _ in range(3):
+            j = dict(s)
+            j["pitchDegrees"] = s["pitchDegrees"] + float(rng.uniform(-0.8, 0.8))
+            j["azimuthDegrees"] = s["azimuthDegrees"] + float(rng.uniform(-0.8, 0.8))
+            over.append(j)
+    payload = {"solarPotential": {"roofSegmentStats": over}}
+
+    class FakeClient:
+        def building_insights(self, lat, lng):
+            return payload
+
+        def data_layers(self, lat, lng, radius_m=50.0):
+            return {"dsmUrl": "http://x/dsm", "maskUrl": "http://x/mask"}
+
+    def fetch(url, key):
+        return dsm_b if url.endswith("dsm") else mask_b
+
+    model = build_model_light(LAT0, LON0, "k", client=FakeClient(), fetch=fetch)
+    assert len(model.facets) == 4  # 12 jittered segments -> 4 physical planes
+    ll = model.line_lengths()
+    assert ll["ridge"]["count"] == 1
+    assert ll["hip"]["count"] == 4
+
+
 def test_light_hip_roundtrip():
     facets = hip_roof(40, 24, 6)
     dsm_b, mask_b, segs = _synth(facets)

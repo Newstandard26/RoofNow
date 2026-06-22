@@ -254,8 +254,31 @@ def _trace_region(region: np.ndarray, plane, transform: RasterTransform, simplif
     return out
 
 
+def _merge_priors(priors, *, slope_tol: float = 0.05, z_tol: float = 2.0):
+    """Collapse Solar over-segmentation. Google's Solar API often splits one
+    physical roof plane into several roofSegmentStats; each becomes a near-equal
+    plane prior (a, b, c). With several near-duplicates, assign_pixels splits a
+    single facet's pixels between them on noise alone, fragmenting it. Merge
+    priors whose plane coefficients match within tolerance so each physical
+    plane is one prior. a, b are slopes (tan pitch); c is the plane's height (ft)
+    extrapolated to the local origin, so z_tol distinguishes stacked roofs.
+    """
+    merged: List[dict] = []
+    for p in priors:
+        a, b, c = p["abc"]
+        for m in merged:
+            ma, mb, mc = m["abc"]
+            if (abs(a - ma) <= slope_tol and abs(b - mb) <= slope_tol
+                    and abs(c - mc) <= z_tol):
+                break
+        else:
+            merged.append({"id": p["id"], "abc": (a, b, c)})
+    return merged
+
+
 def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft=1.0,
-                  snap_tol=1.2, edge_tol=0.9, min_facet_area_px=12):
+                  snap_tol=1.2, edge_tol=0.9, min_facet_area_px=24):
+    priors = _merge_priors(priors)
     planes = [p["abc"] for p in priors]
     labels = assign_pixels(dsm, mask, planes, transform, max_residual)
     facets = []
