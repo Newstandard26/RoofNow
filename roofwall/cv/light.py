@@ -366,7 +366,17 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     # weld); imported lazily to avoid a module import cycle.
     from roofwall.cv.lines import measure_lines
     lines = measure_lines(labels, planes, transform, mask)
-    return snapped, lines
+    debug = {
+        "n_planes_kept": len(planes),
+        "n_facets_traced": len(facets),
+        "res_ft": round(transform.res, 3),
+        "grid": [int(dsm.shape[0]), int(dsm.shape[1])],
+        "roof_area_sqft": round(float(int((labels >= 0).sum()) * res2), 1),
+        "facet_areas_sqft": sorted(
+            (round(float(int((labels == i).sum()) * res2), 1) for i in range(len(planes))),
+            reverse=True),
+    }
+    return snapped, lines, debug
 
 
 # ---------- orchestrator ----------
@@ -398,8 +408,10 @@ def build_model_light(lat: float, lng: float, key: str, *,
     mask_arr, _, _, _ = geotiff_to_local(mask_b, to_feet=False, ref_lonlat=(meta["lon0"], meta["lat0"]))
     mask = (mask_arr > 0).astype("uint8")
     priors = priors_from_solar(segments, lonlat_to_local)
-    facets, lines = recover_light(dsm_ft, mask, transform, priors)
+    facets, lines, debug = recover_light(dsm_ft, mask, transform, priors)
     model = BuildingModel.from_edge_facets(
         to_roof_edges(facets), Origin(lat, lng), "solar-dsm")
     model.measured_lines = lines
+    debug["n_solar_segments"] = len(segments)
+    model.debug = debug
     return model

@@ -213,11 +213,14 @@ def _geometry_from_model(model) -> dict[str, Any]:
     """Project a recovered BuildingModel to the UI geometry payload."""
     from roofwall.report.diagram import from_edge_facets
 
-    return {
+    out = {
         "roof_diagram": from_edge_facets(model.to_edge_facets()),
         "line_lengths": model.line_lengths(),
         "recovery_status": f"ok:{len(model.facets)}",
     }
+    if getattr(model, "debug", None) is not None:
+        out["debug"] = model.debug
+    return out
 
 
 def _empty_geometry(status: str) -> dict[str, Any]:
