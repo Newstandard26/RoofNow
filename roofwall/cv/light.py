@@ -254,7 +254,7 @@ def _trace_region(region: np.ndarray, plane, transform: RasterTransform, simplif
     return out
 
 
-def _merge_priors(priors, *, slope_tol: float = 0.05, z_tol: float = 2.0):
+def _merge_priors(priors, *, slope_tol: float = 0.03, z_tol: float = 1.0):
     """Collapse Solar over-segmentation. Google's Solar API often splits one
     physical roof plane into several roofSegmentStats; each becomes a near-equal
     plane prior (a, b, c). With several near-duplicates, assign_pixels splits a
@@ -262,6 +262,11 @@ def _merge_priors(priors, *, slope_tol: float = 0.05, z_tol: float = 2.0):
     priors whose plane coefficients match within tolerance so each physical
     plane is one prior. a, b are slopes (tan pitch); c is the plane's height (ft)
     extrapolated to the local origin, so z_tol distinguishes stacked roofs.
+
+    Tolerances are deliberately tight: merging only true duplicates. On complex
+    roofs Solar already *under*-segments (e.g. 11 segments for a 14-facet roof),
+    so collapsing genuinely distinct neighbours into one averaged ("mongrel")
+    plane is what spawns the shallow fits that misclassify hips as valleys.
     """
     merged: List[dict] = []
     for p in priors:
@@ -362,9 +367,9 @@ def _smooth_labels(labels, nplanes, iters=2):
     return L
 
 
-def recover_light(dsm, mask, transform, priors, *, max_residual=1.5, simplify_ft=1.8,
+def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft=1.8,
                   snap_tol=2.5, edge_tol=1.5, min_facet_area_px=24,
-                  min_facet_area_sqft=25.0, min_keep_sqft=40.0, refine_iters=6,
+                  min_facet_area_sqft=25.0, min_keep_sqft=40.0, refine_iters=4,
                   smooth_iters=4):
     """DSM + Solar plane priors -> snapped facet polygons.
 

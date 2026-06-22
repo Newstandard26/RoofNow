@@ -202,7 +202,7 @@ def _split_outline_segment(p0, p1, labels, transform, planes):
 
 
 def measure_lines(labels, planes, transform, mask=None, *,
-                  min_shared_px: int = 6, simplify_ft: float = 0.7,
+                  min_shared_px: int = 6, simplify_ft: float = 1.2,
                   min_edge_ft: float = 2.0, diag: list | None = None) -> Dict[str, dict]:
     """Aggregate roof line lengths -> {type: {count, length_ft}} (+ drip_edge).
 
