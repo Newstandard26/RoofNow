@@ -87,6 +87,8 @@ def test_recover_in_process_is_graceful(monkeypatch):
 def test_recover_geometry_in_process_returns_real_diagram(monkeypatch):
     # Light path returns a model -> geometry payload has real per-facet polys
     # (not bounding-box rectangles) plus the Length Diagram.
+    pytest.importorskip("contourpy")  # roofwall.cv.light import dep
+    pytest.importorskip("tifffile")
     monkeypatch.delenv("ROOFWALL_CV_URL", raising=False)
     import roofwall.app as app
     from roofwall.measurement.edges import hip_roof
@@ -105,6 +107,8 @@ def test_recover_geometry_in_process_returns_real_diagram(monkeypatch):
 
 
 def test_recover_geometry_graceful_on_error(monkeypatch):
+    pytest.importorskip("contourpy")  # roofwall.cv.light import dep
+    pytest.importorskip("tifffile")
     monkeypatch.delenv("ROOFWALL_CV_URL", raising=False)
     import roofwall.app as app
 
