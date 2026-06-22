@@ -362,9 +362,9 @@ def _smooth_labels(labels, nplanes, iters=2):
     return L
 
 
-def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft=1.8,
+def recover_light(dsm, mask, transform, priors, *, max_residual=1.5, simplify_ft=1.8,
                   snap_tol=2.5, edge_tol=1.5, min_facet_area_px=24,
-                  min_facet_area_sqft=25.0, min_keep_sqft=40.0, refine_iters=4,
+                  min_facet_area_sqft=25.0, min_keep_sqft=40.0, refine_iters=6,
                   smooth_iters=4):
     """DSM + Solar plane priors -> snapped facet polygons.
 
