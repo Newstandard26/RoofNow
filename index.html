@@ -468,7 +468,12 @@
       const note = $("r-note"), prev = note.textContent;
       note.textContent = prev + " Refining roof outline…";
       try {
-        const g = await (await fetch(`/api/recover?lat=${lat}&lng=${lng}`)).json();
+        // Version-tag the request so a browser/CDN can't serve an /api/recover
+        // response cached from an older deploy (bump APP_VERSION on geometry
+        // changes to force every client to refetch fresh line lengths/outlines).
+        const APP_VERSION = "2026.06.22";
+        const g = await (await fetch(
+          `/api/recover?lat=${lat}&lng=${lng}&v=${APP_VERSION}`)).json();
         if (g && g.roof_diagram && g.roof_diagram.length) {
           renderDiagram(g.roof_diagram);
           renderLineLengths(g.line_lengths);
