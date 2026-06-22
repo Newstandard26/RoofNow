@@ -49,6 +49,9 @@ class BuildingModel:
     # valley/eave/rake). When present this is authoritative — it's more reliable
     # than classifying edges of recovered facets that may not perfectly weld.
     measured_lines: Optional[dict] = None
+    # Recovery diagnostics (plane/facet counts, areas) for tuning, surfaced by
+    # /api/recover?debug=1. Never affects the report.
+    debug: Optional[dict] = None
 
     def to_edge_facets(self) -> List[EdgeFacet]:
         return [make_facet(f.id, f.verts, source=self.source) for f in self.facets]
