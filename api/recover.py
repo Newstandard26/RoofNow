@@ -40,7 +40,12 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Cache-Control", "public, max-age=300")
+        # Short cache + revalidate so a geometry change propagates within a
+        # minute instead of lingering up to 5 min; serve-stale-while-revalidate
+        # keeps it fast. (The frontend also version-tags the URL.)
+        self.send_header(
+            "Cache-Control",
+            "public, max-age=60, stale-while-revalidate=300, must-revalidate")
         self.end_headers()
         self.wfile.write(body)
 
