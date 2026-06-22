@@ -342,6 +342,42 @@ def _seeded_component(region: np.ndarray, center_rc) -> np.ndarray:
     return out
 
 
+def _connected_components(region: np.ndarray):
+    """Yield a boolean mask for each 8-connected component of `region` (bool).
+
+    One fitted plane is keyed by orientation (pitch/azimuth/height), so two
+    physically-separate facets that face the same way land on the same label.
+    Tracing that label as one region gives a scattered, self-overlapping "star"
+    polygon. Splitting it into connected components turns each into its own
+    compact facet for the diagram (line lengths read the label map directly and
+    are unaffected).
+    """
+    from collections import deque
+
+    region = np.asarray(region, dtype=bool)
+    seen = np.zeros_like(region)
+    nrows, ncols = region.shape
+    ys, xs = np.nonzero(region)
+    for y0, x0 in zip(ys.tolist(), xs.tolist()):
+        if seen[y0, x0]:
+            continue
+        comp = np.zeros_like(region)
+        comp[y0, x0] = True
+        seen[y0, x0] = True
+        dq = deque([(y0, x0)])
+        while dq:
+            r, c = dq.popleft()
+            for nr in (r - 1, r, r + 1):
+                if not (0 <= nr < nrows):
+                    continue
+                for nc in (c - 1, c, c + 1):
+                    if 0 <= nc < ncols and region[nr, nc] and not seen[nr, nc]:
+                        seen[nr, nc] = True
+                        comp[nr, nc] = True
+                        dq.append((nr, nc))
+        yield comp
+
+
 def _smooth_labels(labels, nplanes, iters=2):
     """Majority filter the label map so each facet is a solid contiguous blob.
 
@@ -429,12 +465,18 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
 
     facets = []
     for i, pid in enumerate(ids):
-        region = labels == i
-        if int(region.sum()) < min_facet_area_px:
+        base = labels == i
+        if int(base.sum()) < min_facet_area_px:
             continue
-        verts = _trace_region(region, planes[i], transform, simplify_ft)
-        if len(verts) >= 3 and _poly_area_sqft(verts) >= min_facet_area_sqft:
-            facets.append({"id": pid, "verts": verts})
+        # Trace each connected component of the plane's region as its own facet,
+        # so two same-facing roof sections don't fuse into one star-shaped,
+        # self-overlapping polygon.
+        for ci, comp in enumerate(_connected_components(base)):
+            if int(comp.sum()) < min_facet_area_px:
+                continue
+            verts = _trace_region(comp, planes[i], transform, simplify_ft)
+            if len(verts) >= 3 and _poly_area_sqft(verts) >= min_facet_area_sqft:
+                facets.append({"id": f"{pid}.{ci}" if ci else pid, "verts": verts})
     snapped = snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
     # Line lengths from the plane geometry (accurate even when facets don't
     # weld); imported lazily to avoid a module import cycle.
