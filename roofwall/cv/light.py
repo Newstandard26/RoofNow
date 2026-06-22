@@ -66,23 +66,37 @@ def _read_geotiff(data: bytes):
         epsg = geo.get("ProjectedCSTypeGeoKey") or geo.get("GeographicTypeGeoKey")
         present = sorted({t.name for t in tags.values()} | set(geo.keys()))
 
-    if scale is not None and tie is not None and len(scale) >= 2 and len(tie) >= 5:
+    # Values may arrive as flat tuples (raw tags) or numpy arrays of any shape
+    # (parsed geokeys, e.g. ModelTransformation as a 4x4) — flatten before use.
+    scale = np.asarray(scale, dtype=float).ravel() if scale is not None else None
+    tie = np.asarray(tie, dtype=float).ravel() if tie is not None else None
+    xform = np.asarray(xform, dtype=float).ravel() if xform is not None else None
+
+    if scale is not None and tie is not None and scale.size >= 2 and tie.size >= 5:
         sx, sy = float(scale[0]), float(scale[1])
         ox = float(tie[3]) - float(tie[0]) * sx   # back out the tiepoint's pixel offset
         oy = float(tie[4]) + float(tie[1]) * sy
-    elif xform is not None and len(xform) >= 8:
-        m = [float(v) for v in xform]             # row-major 4x4
-        sx, sy = m[0], -m[5]
-        ox, oy = m[3], m[7]
+    elif xform is not None and xform.size >= 8:
+        sx, sy = float(xform[0]), float(-xform[5])  # row-major 4x4 affine
+        ox, oy = float(xform[3]), float(xform[7])
     else:
         raise ValueError(
             "GeoTIFF georeference not found (no ModelPixelScale/ModelTiepoint or "
             "ModelTransformation); tags present: " + ", ".join(present))
+    return arr, sx, sy, ox, oy, _as_epsg(epsg)
+
+
+def _as_epsg(v):
+    """Coerce a geokey CRS value (int, str, or 1-element array) to int | None."""
+    if v is None:
+        return None
     try:
-        epsg = int(epsg) if epsg is not None else None
-    except (TypeError, ValueError):
-        epsg = None
-    return arr, sx, sy, ox, oy, epsg
+        return int(np.asarray(v).ravel()[0])
+    except (TypeError, ValueError, IndexError):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
 
 
 def _merc_to_lonlat(x: float, y: float) -> tuple[float, float]:
