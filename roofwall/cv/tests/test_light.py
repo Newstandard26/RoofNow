@@ -217,6 +217,34 @@ def test_noisy_priors_refine_to_clean_facets():
     assert ll["eave"]["count"] == 4
 
 
+def test_spurious_plane_is_pruned():
+    # An extra bogus segment (a noise plane Solar shouldn't have) must not create
+    # phantom facets/valleys: pruning drops planes that own too little roof.
+    facets = hip_roof(40, 24, 6)
+    dsm_b, mask_b, segs = _synth(facets)
+    segs = segs + [{"pitchDegrees": 38.0, "azimuthDegrees": 47.0,
+                    "center": dict(segs[0]["center"]),
+                    "planeHeightAtCenterMeters": segs[0]["planeHeightAtCenterMeters"] + 1.5}]
+    payload = {"solarPotential": {"roofSegmentStats": segs}}
+
+    class FakeClient:
+        def building_insights(self, lat, lng):
+            return payload
+
+        def data_layers(self, lat, lng, radius_m=50.0):
+            return {"dsmUrl": "http://x/dsm", "maskUrl": "http://x/mask"}
+
+    def fetch(url, key):
+        return dsm_b if url.endswith("dsm") else mask_b
+
+    model = build_model_light(LAT0, LON0, "k", client=FakeClient(), fetch=fetch)
+    assert len(model.facets) == 4          # spurious plane pruned
+    ll = model.line_lengths()
+    assert ll["ridge"]["count"] == 1
+    assert ll["hip"]["count"] == 4
+    assert "valley" not in ll and "rake" not in ll   # a hip has neither
+
+
 def test_light_hip_roundtrip():
     facets = hip_roof(40, 24, 6)
     dsm_b, mask_b, segs = _synth(facets)
