@@ -107,6 +107,27 @@ def test_read_geotiff_model_transformation():
     assert rarr.shape == (3, 4)
 
 
+def test_utm_inverse_matches_pyproj():
+    # The Solar DSM is WGS84 UTM (e.g. EPSG:32610). Validate the pure-Python
+    # Transverse-Mercator inverse against pyproj across a few in-zone points.
+    pyproj = pytest.importorskip("pyproj")
+    from roofwall.cv.light import _projector
+
+    fwd = pyproj.Transformer.from_crs(4326, 32610, always_xy=True)  # zone 10N
+    inv = _projector(32610)
+    for lat, lon in [(37.4220, -122.0841), (40.0, -123.0), (45.0, -121.5)]:
+        e, n = fwd.transform(lon, lat)
+        rlon, rlat = inv(e, n)
+        assert abs(rlon - lon) < 1e-6
+        assert abs(rlat - lat) < 1e-6
+
+
+def test_projector_rejects_unknown_crs():
+    from roofwall.cv.light import _projector
+    with pytest.raises(ValueError, match="EPSG:2193"):
+        _projector(2193)  # NZ Transverse Mercator — not supported
+
+
 def test_light_hip_roundtrip():
     facets = hip_roof(40, 24, 6)
     dsm_b, mask_b, segs = _synth(facets)
