@@ -88,6 +88,25 @@ def _synth(facets):
     return _tif(dsm, px, ulx, uly), _tif(mask, px, ulx, uly), segs
 
 
+def test_read_geotiff_model_transformation():
+    # Some DSM GeoTIFFs georeference via a ModelTransformation matrix (tag 34264)
+    # rather than ModelPixelScale + ModelTiepoint. The reader must handle both.
+    from roofwall.cv.light import _read_geotiff
+
+    arr = np.arange(12, dtype="float32").reshape(3, 4)
+    sx, sy, ox, oy = 0.25, 0.25, 1000.0, 2000.0
+    matrix = (sx, 0.0, 0.0, ox,
+              0.0, -sy, 0.0, oy,
+              0.0, 0.0, 0.0, 0.0,
+              0.0, 0.0, 0.0, 1.0)
+    buf = io.BytesIO()
+    tifffile.imwrite(buf, arr, extratags=[(34264, "d", 16, matrix, True)])
+    rarr, rsx, rsy, rox, roy, epsg = _read_geotiff(buf.getvalue())
+    assert (rsx, rsy, rox, roy) == (sx, sy, ox, oy)
+    assert epsg is None
+    assert rarr.shape == (3, 4)
+
+
 def test_light_hip_roundtrip():
     facets = hip_roof(40, 24, 6)
     dsm_b, mask_b, segs = _synth(facets)
