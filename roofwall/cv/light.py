@@ -306,7 +306,7 @@ def _poly_area_sqft(verts) -> float:
 
 def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft=1.8,
                   snap_tol=2.5, edge_tol=1.5, min_facet_area_px=24,
-                  min_facet_area_sqft=25.0, refine_iters=4):
+                  min_facet_area_sqft=25.0, min_keep_sqft=40.0, refine_iters=4):
     """DSM + Solar plane priors -> snapped facet polygons.
 
     The Solar priors are only an initialization: their pitch/azimuth/height are
@@ -341,6 +341,18 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         planes, ids = new_planes, [d["id"] for d in deduped]
 
     labels = assign_pixels(dsm, mask, planes, transform, max_residual)
+    # Prune to the dominant planes: drop any plane that owns less than
+    # min_keep_sqft of roof, then reassign every pixel to a surviving plane.
+    # Noise bumps (vents, AC units, tree overhang) spawn tiny spurious planes;
+    # left in, each adds phantom ridges/hips/valleys and chops the eave outline.
+    res2 = transform.res * transform.res
+    keep = [i for i in range(len(planes))
+            if int((labels == i).sum()) * res2 >= min_keep_sqft]
+    if keep and len(keep) < len(planes):
+        planes = [planes[i] for i in keep]
+        ids = [ids[i] for i in keep]
+        labels = assign_pixels(dsm, mask, planes, transform, max_residual)
+
     facets = []
     for i, pid in enumerate(ids):
         region = labels == i
