@@ -11,9 +11,15 @@ requires-python = ">=3.11"
 license = { text = "Proprietary" }
 authors = [{ name = "New Standard Restoration" }]
 dependencies = [
-    # The measurement engine is pure-stdlib. Everything below powers the
-    # data-source / report layers (Phase 1+). Kept loose on purpose.
+    # The measurement engine is pure-stdlib. `requests` powers live Solar/Geocode
+    # lookups. numpy + tifffile + contourpy are the lightweight DSM-recovery stack
+    # (api/recover.py): they MUST be base deps, not optional extras — Vercel's
+    # Python builder installs only [project].dependencies (via uv) into the
+    # serverless functions and ignores requirements.txt. ~74 MB, fits the limit.
     "requests>=2.31",
+    "numpy>=1.26",
+    "tifffile>=2024.1.30",
+    "contourpy>=1.2",
 ]
 
 [project.optional-dependencies]
