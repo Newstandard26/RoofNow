@@ -104,20 +104,79 @@ def _merc_to_lonlat(x: float, y: float) -> tuple[float, float]:
             math.degrees(2.0 * math.atan(math.exp(y / _R)) - math.pi / 2.0))
 
 
+# WGS84 ellipsoid (for the UTM / Transverse-Mercator inverse).
+_WGS_A = 6378137.0
+_WGS_F = 1.0 / 298.257223563
+_WGS_E2 = _WGS_F * (2.0 - _WGS_F)
+
+
+def _utm_to_lonlat_factory(zone: int, northern: bool):
+    """Closed-form inverse Transverse Mercator (Snyder) for a WGS84 UTM zone.
+    Returns a function (easting, northing) -> (lon_deg, lat_deg). Pure Python,
+    so the light stack stays free of pyproj/PROJ. Accurate to <1 m in-zone.
+    """
+    a, e2 = _WGS_A, _WGS_E2
+    e1 = (1 - math.sqrt(1 - e2)) / (1 + math.sqrt(1 - e2))
+    ep2 = e2 / (1 - e2)
+    k0 = 0.9996
+    lon0 = math.radians(zone * 6 - 183)              # central meridian
+    false_n = 0.0 if northern else 10_000_000.0
+    m_denom = a * (1 - e2 / 4 - 3 * e2**2 / 64 - 5 * e2**3 / 256)
+
+    def to_lonlat(easting: float, northing: float):
+        x = easting - 500_000.0
+        mu = ((northing - false_n) / k0) / m_denom
+        phi1 = (mu
+                + (3 * e1 / 2 - 27 * e1**3 / 32) * math.sin(2 * mu)
+                + (21 * e1**2 / 16 - 55 * e1**4 / 32) * math.sin(4 * mu)
+                + (151 * e1**3 / 96) * math.sin(6 * mu)
+                + (1097 * e1**4 / 512) * math.sin(8 * mu))
+        s1, c1, t1 = math.sin(phi1), math.cos(phi1), math.tan(phi1)
+        C1 = ep2 * c1**2
+        T1 = t1**2
+        N1 = a / math.sqrt(1 - e2 * s1**2)
+        R1 = a * (1 - e2) / (1 - e2 * s1**2) ** 1.5
+        D = x / (N1 * k0)
+        phi = phi1 - (N1 * t1 / R1) * (
+            D**2 / 2
+            - (5 + 3 * T1 + 10 * C1 - 4 * C1**2 - 9 * ep2) * D**4 / 24
+            + (61 + 90 * T1 + 298 * C1 + 45 * T1**2 - 252 * ep2 - 3 * C1**2) * D**6 / 720)
+        lon = lon0 + (
+            D
+            - (1 + 2 * T1 + C1) * D**3 / 6
+            + (5 - 2 * C1 + 28 * T1 - 3 * C1**2 + 8 * ep2 + 24 * T1**2) * D**5 / 120) / c1
+        return (math.degrees(lon), math.degrees(phi))
+
+    return to_lonlat
+
+
+def _projector(epsg):
+    """Pick a (world-x, world-y) -> (lon, lat) inverse for the GeoTIFF's CRS.
+    Solar DSMs come in WGS84 UTM (EPSG 326xx N / 327xx S); also accept Web
+    Mercator. Anything else raises with the EPSG so it's actionable.
+    """
+    if epsg is None or epsg in _WEBMERC_EPSG:
+        return _merc_to_lonlat
+    if 32601 <= epsg <= 32660:
+        return _utm_to_lonlat_factory(epsg - 32600, northern=True)
+    if 32701 <= epsg <= 32760:
+        return _utm_to_lonlat_factory(epsg - 32700, northern=False)
+    raise ValueError(
+        f"GeoTIFF CRS EPSG:{epsg} unsupported by the light reader "
+        "(supports Web Mercator / EPSG:3857 and WGS84 UTM / EPSG:326xx,327xx)")
+
+
 def geotiff_to_local(data: bytes, *, to_feet: bool = True, ref_lonlat=None):
-    """Read a 3857 GeoTIFF and return (array, RasterTransform[feet],
-    lonlat_to_local[feet], meta). Mirrors geo.geotiff_to_local."""
+    """Read a Solar DSM/mask GeoTIFF (UTM or Web Mercator) and return
+    (array, RasterTransform[feet], lonlat_to_local[feet], meta)."""
     arr, sx, sy, ox, oy, epsg = _read_geotiff(data)
-    if epsg is not None and epsg not in _WEBMERC_EPSG:
-        raise ValueError(
-            f"GeoTIFF CRS EPSG:{epsg} unsupported by the light reader "
-            "(expects Web Mercator / EPSG:3857)")
+    to_lonlat = _projector(epsg)
     if to_feet:
         arr = arr * M_TO_FT
     nrows, ncols = arr.shape
 
     def px_lonlat(col: float, row: float):
-        return _merc_to_lonlat(ox + (col + 0.5) * sx, oy - (row + 0.5) * sy)
+        return to_lonlat(ox + (col + 0.5) * sx, oy - (row + 0.5) * sy)
 
     lon0, lat0 = ref_lonlat if ref_lonlat else px_lonlat(ncols / 2.0, nrows / 2.0)
     coslat = math.cos(math.radians(lat0))
