@@ -34,16 +34,55 @@ _R = 6378137.0  # WGS84 / Web Mercator radius (m)
 
 
 # ---------- GeoTIFF read + georeference (no rasterio/pyproj) ----------
+# EPSG codes that are Web Mercator (the closed-form inverse below applies).
+_WEBMERC_EPSG = {3857, 900913, 102100, 3587, 3785}
+
+
 def _read_geotiff(data: bytes):
+    """Return (array, sx, sy, ox, oy, epsg): pixel scales (world units/px) and
+    the world coords of the top-left pixel corner (0, 0). Supports both standard
+    GeoTIFF georeferencings — ModelPixelScale+ModelTiepoint and the
+    ModelTransformation matrix — reading via parsed geokeys or raw tags. On
+    failure raises with the tags actually present so the format is diagnosable.
+    """
     with tifffile.TiffFile(io.BytesIO(data)) as tf:
         page = tf.pages[0]
         arr = page.asarray().astype(float)
         tags = page.tags
-        scale = tags[33550].value if 33550 in tags else None      # ModelPixelScale
-        tie = tags[33922].value if 33922 in tags else None        # ModelTiepoint
-    if scale is None or tie is None:
-        raise ValueError("GeoTIFF missing ModelPixelScale/ModelTiepoint tags")
-    return arr, scale, tie
+        try:
+            geo = dict(page.geotiff_tags or {})
+        except Exception:  # noqa: BLE001 - geokey parsing is best-effort
+            geo = {}
+
+        def tag_val(code: int, name: str):
+            if geo.get(name) is not None:
+                return geo[name]
+            t = tags.get(code)
+            return t.value if t is not None else None
+
+        scale = tag_val(33550, "ModelPixelScale")
+        tie = tag_val(33922, "ModelTiepoint")
+        xform = tag_val(34264, "ModelTransformation")
+        epsg = geo.get("ProjectedCSTypeGeoKey") or geo.get("GeographicTypeGeoKey")
+        present = sorted({t.name for t in tags.values()} | set(geo.keys()))
+
+    if scale is not None and tie is not None and len(scale) >= 2 and len(tie) >= 5:
+        sx, sy = float(scale[0]), float(scale[1])
+        ox = float(tie[3]) - float(tie[0]) * sx   # back out the tiepoint's pixel offset
+        oy = float(tie[4]) + float(tie[1]) * sy
+    elif xform is not None and len(xform) >= 8:
+        m = [float(v) for v in xform]             # row-major 4x4
+        sx, sy = m[0], -m[5]
+        ox, oy = m[3], m[7]
+    else:
+        raise ValueError(
+            "GeoTIFF georeference not found (no ModelPixelScale/ModelTiepoint or "
+            "ModelTransformation); tags present: " + ", ".join(present))
+    try:
+        epsg = int(epsg) if epsg is not None else None
+    except (TypeError, ValueError):
+        epsg = None
+    return arr, sx, sy, ox, oy, epsg
 
 
 def _merc_to_lonlat(x: float, y: float) -> tuple[float, float]:
@@ -54,12 +93,14 @@ def _merc_to_lonlat(x: float, y: float) -> tuple[float, float]:
 def geotiff_to_local(data: bytes, *, to_feet: bool = True, ref_lonlat=None):
     """Read a 3857 GeoTIFF and return (array, RasterTransform[feet],
     lonlat_to_local[feet], meta). Mirrors geo.geotiff_to_local."""
-    arr, scale, tie = _read_geotiff(data)
+    arr, sx, sy, ox, oy, epsg = _read_geotiff(data)
+    if epsg is not None and epsg not in _WEBMERC_EPSG:
+        raise ValueError(
+            f"GeoTIFF CRS EPSG:{epsg} unsupported by the light reader "
+            "(expects Web Mercator / EPSG:3857)")
     if to_feet:
         arr = arr * M_TO_FT
     nrows, ncols = arr.shape
-    sx, sy = scale[0], scale[1]
-    ox, oy = tie[3], tie[4]   # world (merc) of pixel (tie[0], tie[1]) ~ (0,0)
 
     def px_lonlat(col: float, row: float):
         return _merc_to_lonlat(ox + (col + 0.5) * sx, oy - (row + 0.5) * sy)
