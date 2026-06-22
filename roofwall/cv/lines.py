@@ -30,6 +30,10 @@ _RAKE_SLOPE = 0.25          # outline: only call it a rake if the facet really
                             # climbs along the edge (~14 deg). Below this it's an
                             # eave whose facet plane is merely slightly skew-fit;
                             # a true gable rake runs at the full pitch (~0.5).
+_DSM_TRUST_SLOPE = 0.3      # trust the DSM-read edge slope only when it's near
+                            # level; a steep DSM read is the eave cliff leaking
+                            # into the sample, so defer to the (reliable-when-
+                            # steep) facet plane there.
 
 
 def _world_to_colrow(t: RasterTransform, x: float, y: float) -> Tuple[float, float]:
@@ -288,8 +292,15 @@ def measure_lines(labels, planes, transform, mask=None, *, dsm=None,
             if seg_xy < min_edge_ft:
                 continue
             a, b, _c = planes[fi]
+            plane_slope = (a * ux + b * uy) / seg_xy
             dsm_slope = _outline_dsm_slope(q0, q1, labels, transform, dsm)
-            slope_along = dsm_slope if dsm_slope is not None else (a * ux + b * uy) / seg_xy
+            # Trust the DSM only when it reads near-level (it rescues eaves the
+            # plane mis-attributes at corners); a steep DSM read is the eave
+            # cliff bleeding in, so fall back to the plane (right for true rakes).
+            if dsm_slope is not None and abs(dsm_slope) <= _DSM_TRUST_SLOPE:
+                slope_along = dsm_slope
+            else:
+                slope_along = plane_slope
             length_3d = seg_xy * math.hypot(1.0, slope_along)
             kind = "eave" if abs(slope_along) < _RAKE_SLOPE else "rake"
             acc[kind].append(length_3d)
