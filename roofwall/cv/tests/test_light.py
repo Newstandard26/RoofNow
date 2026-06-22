@@ -128,6 +128,12 @@ def test_projector_rejects_unknown_crs():
         _projector(2193)  # NZ Transverse Mercator — not supported
 
 
+def test_poly_area_sqft():
+    from roofwall.cv.light import _poly_area_sqft
+    square = [(0, 0, 0), (10, 0, 1), (10, 10, 1), (0, 10, 0)]  # 10x10 footprint
+    assert abs(_poly_area_sqft(square) - 100.0) < 1e-6
+
+
 def test_merge_priors_collapses_near_duplicates():
     from roofwall.cv.light import _merge_priors
 
