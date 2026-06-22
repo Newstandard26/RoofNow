@@ -304,9 +304,35 @@ def _poly_area_sqft(verts) -> float:
     return abs(s) / 2.0
 
 
+def _smooth_labels(labels, nplanes, iters=2):
+    """Majority filter the label map so each facet is a solid contiguous blob.
+
+    Similar planes otherwise interleave pixel-by-pixel (salt-and-pepper), which
+    spawns fake facet adjacencies and inflates the projected length of every
+    shared edge. Each pixel adopts the label most common among itself + its 4
+    neighbours; assigned pixels never become holes.
+    """
+    L = labels
+    valid = L >= 0
+    for _ in range(max(0, iters)):
+        best_c = np.zeros(L.shape, dtype=np.int16)
+        best_l = np.full(L.shape, -1, dtype=L.dtype)
+        for i in range(nplanes):
+            m = (L == i).astype(np.int16)
+            c = m.copy()                       # include self
+            c[1:, :] += m[:-1, :]; c[:-1, :] += m[1:, :]
+            c[:, 1:] += m[:, :-1]; c[:, :-1] += m[:, 1:]
+            upd = c > best_c
+            best_c = np.where(upd, c, best_c)
+            best_l = np.where(upd, i, best_l)
+        L = np.where(valid, best_l, -1)
+    return L
+
+
 def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft=1.8,
                   snap_tol=2.5, edge_tol=1.5, min_facet_area_px=24,
-                  min_facet_area_sqft=25.0, min_keep_sqft=40.0, refine_iters=4):
+                  min_facet_area_sqft=25.0, min_keep_sqft=40.0, refine_iters=4,
+                  smooth_iters=2):
     """DSM + Solar plane priors -> snapped facet polygons.
 
     The Solar priors are only an initialization: their pitch/azimuth/height are
@@ -351,7 +377,12 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     if keep and len(keep) < len(planes):
         planes = [planes[i] for i in keep]
         ids = [ids[i] for i in keep]
-        labels = assign_pixels(dsm, mask, planes, transform, max_residual)
+
+    # Final measurement labels: fill EVERY building pixel to its nearest plane
+    # (drop the residual cutoff so there are no interior holes), then majority-
+    # smooth so facets are solid blobs and shared borders are clean 1-D edges.
+    labels = assign_pixels(dsm, mask, planes, transform, max_residual=1e9)
+    labels = _smooth_labels(labels, len(planes), smooth_iters)
 
     facets = []
     for i, pid in enumerate(ids):
