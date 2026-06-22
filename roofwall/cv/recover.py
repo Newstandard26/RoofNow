@@ -24,8 +24,6 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 import numpy as np
-from skimage import measure
-from shapely.geometry import Polygon
 
 from roofwall.measurement.snapping import snap_model
 
@@ -105,7 +103,15 @@ def assign_pixels(dsm: np.ndarray, mask: np.ndarray, planes: List[ABC],
 # ---------- step 3+4: trace a region into a 3D polygon ----------
 def trace_facet_polygon(region: np.ndarray, plane: ABC, transform: RasterTransform,
                         simplify_ft: float = 0.7) -> List[Vec]:
-    """region: binary mask of one facet. Returns simplified 3D polygon (>=3 verts) or []."""
+    """region: binary mask of one facet. Returns simplified 3D polygon (>=3 verts) or [].
+
+    skimage + shapely are imported lazily here so the lightweight path
+    (roofwall.cv.light, which reuses assign_pixels/RasterTransform/plane_z from
+    this module) doesn't drag in the heavy CV stack just to import those names.
+    """
+    from shapely.geometry import Polygon
+    from skimage import measure
+
     padded = np.pad(region.astype(float), 1, mode="constant", constant_values=0)
     contours = measure.find_contours(padded, 0.5)
     if not contours:
