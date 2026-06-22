@@ -377,11 +377,11 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     if keep and len(keep) < len(planes):
         planes = [planes[i] for i in keep]
         ids = [ids[i] for i in keep]
+        labels = assign_pixels(dsm, mask, planes, transform, max_residual)
 
-    # Final measurement labels: fill EVERY building pixel to its nearest plane
-    # (drop the residual cutoff so there are no interior holes), then majority-
-    # smooth so facets are solid blobs and shared borders are clean 1-D edges.
-    labels = assign_pixels(dsm, mask, planes, transform, max_residual=1e9)
+    # Majority-smooth the labels so facets are solid blobs and shared borders are
+    # clean 1-D edges (similar planes otherwise interleave pixel-by-pixel). Keep
+    # the residual cutoff (don't fill the whole mask) so area isn't overcounted.
     labels = _smooth_labels(labels, len(planes), smooth_iters)
 
     facets = []

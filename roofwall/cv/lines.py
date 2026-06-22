@@ -65,31 +65,8 @@ def _interior_borders(labels: np.ndarray) -> Dict[Tuple[int, int], List[Tuple[fl
     return out
 
 
-def _classify_interior(i_idx, j_idx, planes, labels, transform, pts_world):
-    """Return (kind, length_ft) for the shared edge of facets i_idx, j_idx."""
-    pi, pj = planes[i_idx], planes[j_idx]
-    ai, bi, ci = pi
-    aj, bj, cj = pj
-    A, B = ai - aj, bi - bj          # intersection line normal in xy
-    nrm = math.hypot(A, B)
-    if nrm < 1e-9:
-        return None                  # parallel planes — no edge
-    dhx, dhy = -B / nrm, A / nrm     # unit direction along the line
-    xs = np.array([p[0] for p in pts_world])
-    ys = np.array([p[1] for p in pts_world])
-    ts = xs * dhx + ys * dhy
-    length_xy = float(ts.max() - ts.min())
-    if length_xy <= 0:
-        return None
-    slope_along = ai * dhx + bi * dhy
-    length_3d = length_xy * math.hypot(1.0, slope_along)
-
-    # Convex (ridge/hip) vs concave (valley): probe just off the edge on each
-    # side. The roof is the *lower* envelope of the two planes at a ridge/hip,
-    # the *upper* envelope at a valley. So in a region, the edge is convex iff
-    # that region's own plane sits below the neighbour's there.
-    nx, ny = A / nrm, B / nrm
-    mx, my = float(xs.mean()), float(ys.mean())
+def _convex_at(mx, my, i_idx, j_idx, pi, pj, nx, ny, labels, transform):
+    """True if the shared edge is convex (ridge/hip) near (mx, my)."""
     step = transform.res * 2.0
     votes = 0
     for s in (1.0, -1.0):
@@ -102,14 +79,56 @@ def _classify_interior(i_idx, j_idx, planes, labels, transform, pts_world):
         else:
             continue
         votes += 1 if plane_z(own, px, py) < plane_z(other, px, py) else -1
-    convex = votes >= 0
+    return votes >= 0
 
+
+def _interior_segments(i_idx, j_idx, planes, labels, transform, pts_world, *,
+                       gap_ft=2.5, min_len_ft=4.0, max_perp_ft=4.0):
+    """Shared edge(s) of facets i,j -> list of (kind, length_ft).
+
+    Projects the shared-border pixels onto the planes' intersection line, then
+    splits them into contiguous runs (breaking where there's a gap along the
+    line) so multiple separate borders aren't fused into one giant span and the
+    length isn't inflated across gaps. Runs that are too short, or too spread
+    perpendicular to the line (a 2-D interleave patch, not a clean edge), are
+    dropped.
+    """
+    pi, pj = planes[i_idx], planes[j_idx]
+    ai, bi, _ci = pi
+    A, B = ai - pj[0], bi - pj[1]
+    nrm = math.hypot(A, B)
+    if nrm < 1e-9:
+        return []
+    dhx, dhy = -B / nrm, A / nrm     # along the line
+    nx, ny = A / nrm, B / nrm        # perpendicular
+    xs = np.array([p[0] for p in pts_world])
+    ys = np.array([p[1] for p in pts_world])
+    t = xs * dhx + ys * dhy
+    u = xs * nx + ys * ny
+    order = np.argsort(t)
+    t, u, xs, ys = t[order], u[order], xs[order], ys[order]
+    slope_along = ai * dhx + bi * dhy
     level = abs(slope_along) < _FLAT_SLOPE
-    if convex:
-        kind = "ridge" if level else "hip"
-    else:
-        kind = "valley"
-    return kind, length_3d
+    factor = math.hypot(1.0, slope_along)
+
+    segs = []
+    start = 0
+    n = len(t)
+    for k in range(1, n + 1):
+        if k == n or (t[k] - t[k - 1]) > gap_ft:
+            run = slice(start, k)
+            start = k
+            length_xy = float(t[run.stop - 1] - t[run.start]) if run.stop > run.start else 0.0
+            if length_xy < min_len_ft:
+                continue
+            perp = float(u[run].max() - u[run].min())
+            if perp > max_perp_ft and perp > 0.6 * length_xy:
+                continue                                 # 2-D patch, not an edge
+            convex = _convex_at(float(xs[run].mean()), float(ys[run].mean()),
+                                i_idx, j_idx, pi, pj, nx, ny, labels, transform)
+            kind = ("ridge" if level else "hip") if convex else "valley"
+            segs.append((kind, length_xy * factor))
+    return segs
 
 
 def _outline_segments(labels, transform, simplify_ft):
@@ -181,9 +200,8 @@ def measure_lines(labels, planes, transform, mask=None, *,
         if len(px_pts) < min_shared_px or i >= len(planes) or j >= len(planes):
             continue
         world = [transform.colrow_to_world(c, r) for c, r in px_pts]
-        res = _classify_interior(i, j, planes, labels, transform, world)
-        if res and res[1] >= min_edge_ft:
-            acc[res[0]].append(res[1])
+        for kind, length in _interior_segments(i, j, planes, labels, transform, world):
+            acc[kind].append(length)
 
     for p0, p1 in _outline_segments(labels, transform, simplify_ft):
         for q0, q1, fi in _split_outline_segment(p0, p1, labels, transform, planes):
