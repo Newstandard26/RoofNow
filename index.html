@@ -181,6 +181,22 @@
         </table>
       </div>
 
+      <div id="pitch-wrap">
+        <div class="section-title">Areas per pitch</div>
+        <table>
+          <thead><tr><th>Pitch</th><th>Area (ft²)</th><th>% of roof</th></tr></thead>
+          <tbody id="pitches"></tbody>
+        </table>
+      </div>
+
+      <div id="waste-wrap">
+        <div class="section-title">Waste factor <span id="complexity" class="sub"></span></div>
+        <table>
+          <thead><tr><th>Waste %</th><th>Area (ft²)</th><th>Squares to order</th></tr></thead>
+          <tbody id="waste"></tbody>
+        </table>
+      </div>
+
       <div class="section-title">Walls</div>
       <div class="walls">
         <div class="wallcard">
@@ -423,6 +439,28 @@
       }
     }
 
+    function renderAreasPerPitch(rows) {
+      const wrap = $("pitch-wrap");
+      if (!rows || !rows.length) { wrap.style.display = "none"; return; }
+      $("pitches").innerHTML = rows.map(r =>
+        `<tr><td>${r.pitch}</td><td>${fmt(r.area_sqft)}</td><td>${r.percent}%</td></tr>`
+      ).join("");
+      wrap.style.display = "";
+    }
+
+    function renderWaste(rows, complexity, suggested) {
+      const wrap = $("waste-wrap");
+      if (!rows || !rows.length) { wrap.style.display = "none"; return; }
+      $("complexity").textContent = complexity ? "· " + complexity + " complexity" : "";
+      $("waste").innerHTML = rows.map(r => {
+        const hot = r.suggested
+          ? ' style="background:rgba(110,168,254,.16);font-weight:700"' : "";
+        const tag = r.suggested ? " <small>(suggested)</small>" : "";
+        return `<tr${hot}><td>${r.waste_pct}%${tag}</td><td>${fmt(r.area_sqft)}</td><td>${fmt2(r.squares)}</td></tr>`;
+      }).join("");
+      wrap.style.display = "";
+    }
+
     // Progressive enhancement: the fast /api/measure report shows Solar bounding
     // boxes; /api/recover runs the real DSM->polygons recovery and we swap in
     // the true facet outlines + Length Diagram once it returns.
@@ -475,6 +513,8 @@
       renderDiagram(d.roof_diagram);
 
       renderLineLengths(d.line_lengths);
+      renderAreasPerPitch(d.areas_per_pitch);
+      renderWaste(d.waste_table, d.roof.structure_complexity, d.roof.suggested_waste_pct);
 
       const w = d.walls, byd = w.by_direction_sqft;
       const max = Math.max(...Object.values(byd), 1);
@@ -498,9 +538,11 @@
       const llNote = d.line_lengths ? ""
         : (d.recovery_status ? " Line lengths unavailable (" + d.recovery_status + ")."
                              : " Line lengths require the boundary-recovery step.");
+      const loc = (typeof d.lat === "number" && typeof d.lng === "number")
+        ? " Property location: " + d.lat.toFixed(7) + ", " + d.lng.toFixed(7) + "." : "";
       const liveNote = "Roof from Google Solar"
         + (d.imagery_date ? " (imagery " + d.imagery_date + ")" : "")
-        + ". Wall figures are estimated from the roof footprint." + llNote;
+        + ". Wall figures are estimated from the roof footprint." + llNote + loc;
       $("r-note").textContent = d.note ||
         (live ? liveNote
               : "Representative sample roof — connect a Google Solar API key for live data.");
