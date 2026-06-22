@@ -269,6 +269,8 @@ def _live_report(
     # report still renders.
     line_lengths, recovery_status = recover_line_lengths(lat, lng, key=key)
 
+    from roofwall.report.diagram import from_solar as _solar_diagram
+
     return {
         "mode": "live",
         "data_source": "Google Solar",
@@ -283,4 +285,5 @@ def _live_report(
         "walls": walls,
         "line_lengths": line_lengths,
         "recovery_status": recovery_status,
+        "roof_diagram": _solar_diagram(payload),
     }
