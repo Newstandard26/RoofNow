@@ -520,7 +520,17 @@ def build_model_light(lat: float, lng: float, key: str, *,
     payload = client.building_insights(lat, lng)
     segments = geo_segments(payload)
 
-    layers = client.data_layers(lat, lng, 50.0)
+    # Anchor the DSM/mask fetch to the building's centre, not the raw click.
+    # Google returns a Data-Layer tile centred on the query point, so two clicks
+    # ~8 ft apart on the SAME roof pull different tiles/masks and produce very
+    # different line lengths. building_insights returns the same building (and
+    # centre) for any click on it, so centring there makes the measurement
+    # stable: the same roof always yields the same numbers.
+    center = payload.get("center") or {}
+    blat = float(center.get("latitude", lat))
+    blng = float(center.get("longitude", lng))
+
+    layers = client.data_layers(blat, blng, 50.0)
     dsm_b = fetch(layers["dsmUrl"], key)
     mask_b = fetch(layers["maskUrl"], key)
 
@@ -533,5 +543,7 @@ def build_model_light(lat: float, lng: float, key: str, *,
         to_roof_edges(facets), Origin(lat, lng), "solar-dsm")
     model.measured_lines = lines
     debug["n_solar_segments"] = len(segments)
+    debug["anchor"] = {"query": [round(lat, 7), round(lng, 7)],
+                       "building_center": [round(blat, 7), round(blng, 7)]}
     model.debug = debug
     return model
