@@ -293,8 +293,20 @@ def _fit_plane(xs: np.ndarray, ys: np.ndarray, zs: np.ndarray):
     return (float(a), float(b), float(c))
 
 
-def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft=1.0,
-                  snap_tol=1.2, edge_tol=0.9, min_facet_area_px=24, refine_iters=4):
+def _poly_area_sqft(verts) -> float:
+    """Horizontal (x-y) polygon area by the shoelace formula."""
+    n = len(verts)
+    s = 0.0
+    for i in range(n):
+        x1, y1 = verts[i][0], verts[i][1]
+        x2, y2 = verts[(i + 1) % n][0], verts[(i + 1) % n][1]
+        s += x1 * y2 - x2 * y1
+    return abs(s) / 2.0
+
+
+def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft=1.8,
+                  snap_tol=2.5, edge_tol=1.5, min_facet_area_px=24,
+                  min_facet_area_sqft=25.0, refine_iters=4):
     """DSM + Solar plane priors -> snapped facet polygons.
 
     The Solar priors are only an initialization: their pitch/azimuth/height are
@@ -303,6 +315,8 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     assign pixels to the nearest plane, refit each plane by least squares to its
     pixels, re-merge any planes that converge together — so the planes settle
     onto the true roof surfaces and each facet fills in as a compact region.
+    Tracing then simplifies edges, drops speck facets (< min_facet_area_sqft),
+    and welds shared edges (snap_tol) to close seams between neighbours.
     """
     priors = _merge_priors(priors)
     planes = [p["abc"] for p in priors]
@@ -333,7 +347,7 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         if int(region.sum()) < min_facet_area_px:
             continue
         verts = _trace_region(region, planes[i], transform, simplify_ft)
-        if len(verts) >= 3:
+        if len(verts) >= 3 and _poly_area_sqft(verts) >= min_facet_area_sqft:
             facets.append({"id": pid, "verts": verts})
     return snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
 
