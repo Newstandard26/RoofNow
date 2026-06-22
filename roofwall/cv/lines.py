@@ -26,6 +26,10 @@ from roofwall.cv.recover import RasterTransform, plane_z
 
 _FLAT_SLOPE = 0.09          # |dz/dxy| below this is "level" (~5 deg)
 _FLAT_VALLEY = 0.05         # a level interior edge is a ridge unless concave
+_RAKE_SLOPE = 0.25          # outline: only call it a rake if the facet really
+                            # climbs along the edge (~14 deg). Below this it's an
+                            # eave whose facet plane is merely slightly skew-fit;
+                            # a true gable rake runs at the full pitch (~0.5).
 
 
 def _world_to_colrow(t: RasterTransform, x: float, y: float) -> Tuple[float, float]:
@@ -66,19 +70,28 @@ def _interior_borders(labels: np.ndarray) -> Dict[Tuple[int, int], List[Tuple[fl
 
 
 def _convex_at(mx, my, i_idx, j_idx, pi, pj, nx, ny, labels, transform):
-    """True if the shared edge is convex (ridge/hip) near (mx, my)."""
-    step = transform.res * 2.0
+    """True if the shared edge is convex (ridge/hip) near (mx, my).
+
+    Steps off the edge along the planes' gradient-difference normal and asks, on
+    each facet's own side, whether that facet's plane sits *below* the other —
+    the signature of a peak (ridge/hip) rather than a trough (valley). Sampling
+    at several distances and voting makes the side lookup robust to the ragged
+    1-2 px boundary smoothing leaves (a single near-edge mis-read used to flip a
+    whole hip to a valley).
+    """
+    res = transform.res
     votes = 0
-    for s in (1.0, -1.0):
-        px, py = mx + s * step * nx, my + s * step * ny
-        lab = _label_at(labels, transform, px, py)
-        if lab == i_idx:
-            own, other = pi, pj
-        elif lab == j_idx:
-            own, other = pj, pi
-        else:
-            continue
-        votes += 1 if plane_z(own, px, py) < plane_z(other, px, py) else -1
+    for d in (2.0, 3.0, 4.0, 5.0):
+        for s in (1.0, -1.0):
+            px, py = mx + s * d * res * nx, my + s * d * res * ny
+            lab = _label_at(labels, transform, px, py)
+            if lab == i_idx:
+                own, other = pi, pj
+            elif lab == j_idx:
+                own, other = pj, pi
+            else:
+                continue
+            votes += 1 if plane_z(own, px, py) < plane_z(other, px, py) else -1
     return votes >= 0
 
 
@@ -189,7 +202,7 @@ def _split_outline_segment(p0, p1, labels, transform, planes):
 
 
 def measure_lines(labels, planes, transform, mask=None, *,
-                  min_shared_px: int = 6, simplify_ft: float = 2.0,
+                  min_shared_px: int = 6, simplify_ft: float = 1.2,
                   min_edge_ft: float = 2.0, diag: list | None = None) -> Dict[str, dict]:
     """Aggregate roof line lengths -> {type: {count, length_ft}} (+ drip_edge).
 
@@ -220,7 +233,7 @@ def measure_lines(labels, planes, transform, mask=None, *,
             a, b, _c = planes[fi]
             slope_along = (a * ux + b * uy) / seg_xy
             length_3d = seg_xy * math.hypot(1.0, slope_along)
-            kind = "eave" if abs(slope_along) < _FLAT_SLOPE else "rake"
+            kind = "eave" if abs(slope_along) < _RAKE_SLOPE else "rake"
             acc[kind].append(length_3d)
             if diag is not None:
                 diag.append({"e": "out", "f": fi, "k": kind,
