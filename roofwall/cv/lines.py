@@ -190,8 +190,12 @@ def _split_outline_segment(p0, p1, labels, transform, planes):
 
 def measure_lines(labels, planes, transform, mask=None, *,
                   min_shared_px: int = 6, simplify_ft: float = 2.0,
-                  min_edge_ft: float = 2.0) -> Dict[str, dict]:
-    """Aggregate roof line lengths -> {type: {count, length_ft}} (+ drip_edge)."""
+                  min_edge_ft: float = 2.0, diag: list | None = None) -> Dict[str, dict]:
+    """Aggregate roof line lengths -> {type: {count, length_ft}} (+ drip_edge).
+
+    Pass `diag` (a list) to collect a per-segment breakdown for tuning: each
+    entry is a compact dict describing one measured interior or outline segment.
+    """
     acc: Dict[str, List[float]] = {k: [] for k in
                                    ("ridge", "hip", "valley", "eave", "rake")}
 
@@ -202,6 +206,8 @@ def measure_lines(labels, planes, transform, mask=None, *,
         world = [transform.colrow_to_world(c, r) for c, r in px_pts]
         for kind, length in _interior_segments(i, j, planes, labels, transform, world):
             acc[kind].append(length)
+            if diag is not None:
+                diag.append({"e": "int", "ij": [i, j], "k": kind, "L": round(length, 1)})
 
     for p0, p1 in _outline_segments(labels, transform, simplify_ft):
         for q0, q1, fi in _split_outline_segment(p0, p1, labels, transform, planes):
@@ -214,7 +220,11 @@ def measure_lines(labels, planes, transform, mask=None, *,
             a, b, _c = planes[fi]
             slope_along = (a * ux + b * uy) / seg_xy
             length_3d = seg_xy * math.hypot(1.0, slope_along)
-            acc["eave" if abs(slope_along) < _FLAT_SLOPE else "rake"].append(length_3d)
+            kind = "eave" if abs(slope_along) < _FLAT_SLOPE else "rake"
+            acc[kind].append(length_3d)
+            if diag is not None:
+                diag.append({"e": "out", "f": fi, "k": kind,
+                             "L": round(length_3d, 1), "s": round(slope_along, 2)})
 
     out: Dict[str, dict] = {}
     for kind, lens in acc.items():
