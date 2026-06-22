@@ -40,7 +40,7 @@ def _tif(arr, px, ulx, uly):
     return buf.getvalue()
 
 
-def _synth(facets):
+def _synth(facets, noise_ft=0.0):
     planes = [abc_from_normal(f.normal, f.verts[0]) for f in facets]
     mxs, mys = [], []
     for f in facets:
@@ -74,6 +74,9 @@ def _synth(facets):
             if bi >= 0:
                 dsm[r, c] = bz / M_TO_FT
                 mask[r, c] = 1
+    if noise_ft:
+        rng = np.random.default_rng(3)
+        dsm = dsm + (mask * rng.normal(0, noise_ft / M_TO_FT, dsm.shape)).astype("float32")
     segs = []
     for f in facets:
         nx, ny, nz = f.normal
@@ -215,6 +218,43 @@ def test_noisy_priors_refine_to_clean_facets():
     assert ll["ridge"]["count"] == 1
     assert ll["hip"]["count"] == 4
     assert ll["eave"]["count"] == 4
+
+
+def test_smooth_labels_removes_salt_and_pepper():
+    from roofwall.cv.light import _smooth_labels
+    clean = np.zeros((24, 24), dtype=int)
+    clean[:, 12:] = 1
+    rng = np.random.default_rng(0)
+    noisy = np.where(rng.random((24, 24)) < 0.18, 1 - clean, clean)
+    smoothed = _smooth_labels(noisy, 2, iters=3)
+    assert (smoothed == clean).mean() > 0.97        # interleaving cleaned up
+
+
+def test_noisy_dsm_recovers_clean_lines():
+    # A noisy DSM makes similar planes interleave (salt-and-pepper) and the
+    # residual cutoff punch holes -> inflated/over-counted edges. fill + smooth
+    # must keep the hip topology clean and the lengths sane.
+    facets = hip_roof(40, 24, 6)
+    dsm_b, mask_b, segs = _synth(facets, noise_ft=0.4)
+    payload = {"solarPotential": {"roofSegmentStats": segs}}
+
+    class FakeClient:
+        def building_insights(self, lat, lng):
+            return payload
+
+        def data_layers(self, lat, lng, radius_m=50.0):
+            return {"dsmUrl": "http://x/dsm", "maskUrl": "http://x/mask"}
+
+    def fetch(url, key):
+        return dsm_b if url.endswith("dsm") else mask_b
+
+    model = build_model_light(LAT0, LON0, "k", client=FakeClient(), fetch=fetch)
+    ll = model.line_lengths()
+    assert ll["ridge"]["count"] == 1
+    assert ll["hip"]["count"] == 4
+    assert ll.get("valley", {"count": 0})["count"] == 0     # a hip has no valleys
+    assert ll["eave"]["length_ft"] == pytest.approx(128.0, rel=0.2)
+    assert ll["hip"]["length_ft"] == pytest.approx(72.0, rel=0.25)
 
 
 def test_spurious_plane_is_pruned():
