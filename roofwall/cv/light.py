@@ -349,7 +349,12 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         verts = _trace_region(region, planes[i], transform, simplify_ft)
         if len(verts) >= 3 and _poly_area_sqft(verts) >= min_facet_area_sqft:
             facets.append({"id": pid, "verts": verts})
-    return snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
+    snapped = snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
+    # Line lengths from the plane geometry (accurate even when facets don't
+    # weld); imported lazily to avoid a module import cycle.
+    from roofwall.cv.lines import measure_lines
+    lines = measure_lines(labels, planes, transform, mask)
+    return snapped, lines
 
 
 # ---------- orchestrator ----------
@@ -381,5 +386,8 @@ def build_model_light(lat: float, lng: float, key: str, *,
     mask_arr, _, _, _ = geotiff_to_local(mask_b, to_feet=False, ref_lonlat=(meta["lon0"], meta["lat0"]))
     mask = (mask_arr > 0).astype("uint8")
     priors = priors_from_solar(segments, lonlat_to_local)
-    facets = recover_light(dsm_ft, mask, transform, priors)
-    return BuildingModel.from_edge_facets(to_roof_edges(facets), Origin(lat, lng), "solar-dsm")
+    facets, lines = recover_light(dsm_ft, mask, transform, priors)
+    model = BuildingModel.from_edge_facets(
+        to_roof_edges(facets), Origin(lat, lng), "solar-dsm")
+    model.measured_lines = lines
+    return model

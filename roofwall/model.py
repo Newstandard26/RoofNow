@@ -45,6 +45,10 @@ class BuildingModel:
     origin: Origin
     source: str
     notes: Optional[str] = None
+    # Line lengths measured directly from the DSM plane geometry (ridge/hip/
+    # valley/eave/rake). When present this is authoritative — it's more reliable
+    # than classifying edges of recovered facets that may not perfectly weld.
+    measured_lines: Optional[dict] = None
 
     def to_edge_facets(self) -> List[EdgeFacet]:
         return [make_facet(f.id, f.verts, source=self.source) for f in self.facets]
@@ -54,7 +58,13 @@ class BuildingModel:
         return weld(self.to_edge_facets(), **tol)
 
     def line_lengths(self, *, snap: bool = True) -> dict[str, Any]:
-        """Length Diagram (ridge/hip/valley/eave/rake). Snaps edges first."""
+        """Length Diagram (ridge/hip/valley/eave/rake).
+
+        Prefers ``measured_lines`` (derived from the DSM plane geometry) when
+        available; otherwise classifies the welded facet edges.
+        """
+        if self.measured_lines is not None:
+            return self.measured_lines
         facets = self.welded() if snap else self.to_edge_facets()
         return line_lengths_dict(facets)
 
