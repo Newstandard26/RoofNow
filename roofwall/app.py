@@ -209,6 +209,99 @@ def _recover_in_process(
         return None, f"error: {exc}"
 
 
+def _geometry_from_model(model) -> dict[str, Any]:
+    """Project a recovered BuildingModel to the UI geometry payload."""
+    from roofwall.report.diagram import from_edge_facets
+
+    return {
+        "roof_diagram": from_edge_facets(model.to_edge_facets()),
+        "line_lengths": model.line_lengths(),
+        "recovery_status": f"ok:{len(model.facets)}",
+    }
+
+
+def _empty_geometry(status: str) -> dict[str, Any]:
+    return {"roof_diagram": None, "line_lengths": None, "recovery_status": status}
+
+
+def recover_geometry(
+    lat: float, lng: float, *, key: str, http_get: Any = None
+) -> dict[str, Any]:
+    """Full DSM->polygons recovery -> real per-facet roof diagram + Length
+    Diagram. Returns ``{roof_diagram, line_lengths, recovery_status}``; never
+    raises. Used by ``/api/recover`` for progressive enhancement so the slow,
+    heavy recovery runs *after* the fast report renders.
+
+    If ``ROOFWALL_CV_URL`` is set we call that service (highest fidelity, heavy
+    CV stack); otherwise we run the lightweight in-process recovery
+    (numpy + tifffile + contourpy), which fits a Vercel function.
+    """
+    url = os.environ.get("ROOFWALL_CV_URL")
+    if url:
+        return _recover_geometry_via_service(url, lat, lng, http_get=http_get)
+    return _recover_geometry_in_process(lat, lng, key)
+
+
+def _recover_geometry_via_service(
+    url: str, lat: float, lng: float, *, http_get: Any = None
+) -> dict[str, Any]:
+    try:
+        if http_get is None:
+            import requests
+
+            resp = requests.get(
+                url.rstrip("/") + "/facets",
+                params={"lat": lat, "lng": lng},
+                timeout=60,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        else:
+            data = http_get(url.rstrip("/") + "/facets", {"lat": lat, "lng": lng})
+        model_d = data.get("model") or {}
+        facets = model_d.get("facets") or []
+        if not facets:
+            return _empty_geometry(data.get("recovery_status") or "no_polygons")
+        from roofwall.model import BuildingModel, ModelFacet, Origin
+        from roofwall.report.diagram import from_edge_facets
+
+        origin = model_d.get("origin") or {}
+        model = BuildingModel(
+            facets=[ModelFacet(str(f["id"]), [tuple(v) for v in f["verts"]])
+                    for f in facets],
+            origin=Origin(origin.get("lat", lat), origin.get("lng", lng)),
+            source=model_d.get("source", "solar-dsm"),
+        )
+        return {
+            "roof_diagram": from_edge_facets(model.to_edge_facets()),
+            "line_lengths": data.get("line_lengths") or model.line_lengths(),
+            "recovery_status": f"ok:{len(facets)}",
+        }
+    except Exception as exc:  # noqa: BLE001
+        return _empty_geometry(f"error: {exc}")
+
+
+def _recover_geometry_in_process(lat: float, lng: float, key: str) -> dict[str, Any]:
+    # Lightweight stack only (numpy + tifffile + contourpy). Verify the deps are
+    # present before any paid dataLayers download so a misconfigured deploy fails
+    # fast and cheap with a clear status instead of mid-recovery.
+    import importlib.util
+
+    for mod in ("numpy", "tifffile", "contourpy"):
+        if importlib.util.find_spec(mod) is None:
+            return _empty_geometry(f"deps_missing:{mod}")
+    try:
+        from roofwall.cv.light import build_model_light
+
+        model = build_model_light(lat, lng, key)
+        if not model.facets:
+            return _empty_geometry("no_polygons")
+        return _geometry_from_model(model)
+    except Exception as exc:  # noqa: BLE001
+        _log(f"geometry recovery error: {exc}")
+        return _empty_geometry(f"error: {exc}")
+
+
 def _live_report(
     address: Optional[str],
     lat: Optional[float],
