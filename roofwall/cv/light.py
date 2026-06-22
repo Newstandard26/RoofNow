@@ -304,6 +304,39 @@ def _poly_area_sqft(verts) -> float:
     return abs(s) / 2.0
 
 
+def _seeded_component(region: np.ndarray, center_rc) -> np.ndarray:
+    """8-connected flood fill of `region` (bool) from the pixel nearest center.
+
+    The Solar mask covers every building in the 50 m tile, so a neighbouring
+    house, garage or shed inflates the roof area and spawns phantom edges along
+    the gap between structures. The tile is centred on the queried building, so
+    keeping only the component containing the centre isolates the roof we mean.
+    """
+    from collections import deque
+
+    if not region.any():
+        return region
+    nrows, ncols = region.shape
+    cr, cc = center_rc
+    if not (0 <= cr < nrows and 0 <= cc < ncols) or not region[cr, cc]:
+        ys, xs = np.nonzero(region)
+        k = int(np.argmin((ys - cr) ** 2 + (xs - cc) ** 2))
+        cr, cc = int(ys[k]), int(xs[k])
+    out = np.zeros_like(region)
+    out[cr, cc] = True
+    dq = deque([(cr, cc)])
+    while dq:
+        r, c = dq.popleft()
+        for nr in (r - 1, r, r + 1):
+            if not (0 <= nr < nrows):
+                continue
+            for nc in (c - 1, c, c + 1):
+                if 0 <= nc < ncols and region[nr, nc] and not out[nr, nc]:
+                    out[nr, nc] = True
+                    dq.append((nr, nc))
+    return out
+
+
 def _smooth_labels(labels, nplanes, iters=2):
     """Majority filter the label map so each facet is a solid contiguous blob.
 
@@ -379,14 +412,14 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         ids = [ids[i] for i in keep]
 
     # Final measurement labels: fill EVERY building pixel to its nearest plane
-    # (drop the residual cutoff so there are no interior holes), then majority-
-    # smooth so facets are solid blobs and shared borders are clean 1-D edges.
+    # (drop the residual cutoff so there are no interior holes), restrict to the
+    # building under the query point so neighbouring structures in the 50 m tile
+    # don't inflate area or spawn phantom edges, then majority-smooth so facets
+    # are solid blobs and shared borders are clean 1-D edges.
     labels = assign_pixels(dsm, mask, planes, transform, max_residual=1e9)
-    labels = _smooth_labels(labels, len(planes), smooth_iters)
-
-    # Majority-smooth the labels so facets are solid blobs and shared borders are
-    # clean 1-D edges (similar planes otherwise interleave pixel-by-pixel). Keep
-    # the residual cutoff (don't fill the whole mask) so area isn't overcounted.
+    mask_sqft = float(int((labels >= 0).sum()) * res2)
+    labels = np.where(_seeded_component(labels >= 0, (nrows // 2, ncols // 2)),
+                      labels, -1)
     labels = _smooth_labels(labels, len(planes), smooth_iters)
 
     facets = []
@@ -408,6 +441,7 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         "res_ft": round(transform.res, 3),
         "grid": [int(dsm.shape[0]), int(dsm.shape[1])],
         "roof_area_sqft": round(float(int((labels >= 0).sum()) * res2), 1),
+        "mask_sqft": round(mask_sqft, 1),
         "facet_areas_sqft": sorted(
             (round(float(int((labels == i).sum()) * res2), 1) for i in range(len(planes))),
             reverse=True),
