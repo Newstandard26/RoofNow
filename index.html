@@ -101,12 +101,16 @@
     .verify.show { display: block; }
     .map { height: 320px; border-radius: 13px; overflow: hidden; border: 1px solid var(--line); }
     .maphint { font-size: 13px; color: var(--muted); margin-top: 8px; }
-    .leaflet-container { background: #0b121a; font: inherit; }
+    /* Google Places Autocomplete dropdown (dark theme) */
+    .pac-container { background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px;
+      margin-top: 6px; box-shadow: 0 12px 30px rgba(0,0,0,.35); font-family: inherit; z-index: 50; }
+    .pac-item { padding: 9px 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13.5px; cursor: pointer; }
+    .pac-item:hover, .pac-item-selected { background: rgba(76,194,255,.14); }
+    .pac-item-query { color: var(--ink); font-size: 14px; }
+    .pac-matched { color: var(--accent-2); }
+    .pac-icon { display: none; }
+    .pac-logo:after { margin: 6px 12px; }
   </style>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 </head>
 <body>
   <div class="wrap">
@@ -224,13 +228,82 @@
       c.addEventListener("click", () => { addr.value = c.dataset.a; selectedLoc = null; runMeasure(); })
     );
 
-    // ---------- address type-ahead ----------
+    // ---------- Google Maps + Places Autocomplete (server-suggest fallback) ----------
     const suggestBox = $("suggest");
-    let suggestTimer = null;
+    let suggestTimer = null, fallbackSuggest = false;
+    let mapsReady = false, gmap = null, gmarker = null, autocomplete = null;
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
 
+    // Continental US (lower-48) — biases + restricts Places and the map.
+    const CONUS = { south: 24.396, west: -125.0, north: 49.384, east: -66.93 };
+
+    // Load the *browser* Maps key from the server, then Google Maps JS.
+    (async () => {
+      try {
+        const cfg = await (await fetch("/api/config")).json();
+        if (cfg && cfg.maps_browser_key) loadGoogleMaps(cfg.maps_browser_key);
+        else enableFallback();
+      } catch { enableFallback(); }
+    })();
+
+    function loadGoogleMaps(key) {
+      window.__initMaps = initMaps;
+      const s = document.createElement("script");
+      s.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key)
+        + "&libraries=places&loading=async&region=US&callback=__initMaps";
+      s.async = true; s.onerror = enableFallback;
+      document.head.appendChild(s);
+    }
+
+    function initMaps() {
+      mapsReady = true;
+      const bounds = new google.maps.LatLngBounds(
+        new google.maps.LatLng(CONUS.south, CONUS.west),
+        new google.maps.LatLng(CONUS.north, CONUS.east));
+      autocomplete = new google.maps.places.Autocomplete(addr, {
+        fields: ["geometry", "formatted_address"],
+        componentRestrictions: { country: "us" },
+        bounds, strictBounds: true,           // continental US only
+        types: ["address"],
+      });
+      autocomplete.addListener("place_changed", () => {
+        const p = autocomplete.getPlace();
+        if (!p || !p.geometry || !p.geometry.location) return;
+        const lat = p.geometry.location.lat(), lng = p.geometry.location.lng();
+        selectedLoc = { lat, lng, description: p.formatted_address || addr.value.trim() };
+        if (p.formatted_address) addr.value = p.formatted_address;
+        showMapG(lat, lng);
+      });
+    }
+
+    function showMapG(lat, lng) {
+      if (!mapsReady) return;
+      const verify = $("verify"); verify.classList.add("show");
+      const pos = { lat, lng };
+      if (!gmap) {
+        gmap = new google.maps.Map($("map"), {
+          center: pos, zoom: 20, mapTypeId: "hybrid", tilt: 0,
+          streetViewControl: false, fullscreenControl: true,
+          mapTypeControl: true, gestureHandling: "greedy",
+        });
+      } else { gmap.setCenter(pos); gmap.setZoom(20); }
+      if (!gmarker) {
+        gmarker = new google.maps.Marker({ position: pos, map: gmap, draggable: true });
+        gmarker.addListener("dragend", () => {
+          const p = gmarker.getPosition();
+          selectedLoc = { lat: p.lat(), lng: p.lng(),
+            description: (selectedLoc && selectedLoc.description) || addr.value.trim() };
+        });
+      } else { gmarker.setPosition(pos); }
+      verify.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    // ---- Fallback (no browser Maps key): server-geocoding suggestions, no map ----
+    function enableFallback() { if (!mapsReady) fallbackSuggest = true; }
+
     addr.addEventListener("input", () => {
-      selectedLoc = null;                 // editing invalidates a prior pick
+      selectedLoc = null;                          // editing invalidates a prior pick
+      if (mapsReady || !fallbackSuggest) return;   // Google Places handles type-ahead
       const q = addr.value.trim();
       clearTimeout(suggestTimer);
       if (q.length < 3) { hideSuggest(); return; }
@@ -238,8 +311,9 @@
     });
 
     addr.addEventListener("keydown", (e) => {
+      if (mapsReady || !fallbackSuggest) return;
       if (e.key === "Enter" && suggestBox.classList.contains("show") && suggestBox.firstElementChild) {
-        e.preventDefault(); e.stopPropagation();       // pick the top suggestion first
+        e.preventDefault(); e.stopPropagation();
         suggestBox.firstElementChild.click();
       } else if (e.key === "Escape") { hideSuggest(); }
     });
@@ -271,31 +345,6 @@
       selectedLoc = { lat: s.lat, lng: s.lng, description: s.description };
       addr.value = s.description;
       hideSuggest();
-      showMap(s.lat, s.lng);
-    }
-
-    // ---------- verify map (keyless satellite imagery) ----------
-    let map = null, marker = null;
-    function showMap(lat, lng) {
-      const verify = $("verify");
-      verify.classList.add("show");
-      if (!map) {
-        map = L.map("map", { zoomControl: true });
-        L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-          { maxZoom: 21, attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics" }).addTo(map);
-      }
-      map.setView([lat, lng], 20);
-      if (!marker) {
-        marker = L.marker([lat, lng], { draggable: true }).addTo(map);
-        marker.on("dragend", () => {
-          const p = marker.getLatLng();
-          selectedLoc = { lat: p.lat, lng: p.lng, description: (selectedLoc && selectedLoc.description) || addr.value.trim() };
-        });
-      } else {
-        marker.setLatLng([lat, lng]);
-      }
-      setTimeout(() => map.invalidateSize(), 60);   // the map was display:none until now
-      verify.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
 
     function render(d) {
@@ -367,8 +416,8 @@
       $("r-note").textContent = d.note ||
         (live ? liveNote
               : "Representative sample roof — connect a Google Solar API key for live data.");
-      // Show the building on the map for the measured location (live results).
-      if (typeof d.lat === "number" && typeof d.lng === "number") showMap(d.lat, d.lng);
+      // Show the building on the Google map for the measured location (live).
+      if (mapsReady && typeof d.lat === "number" && typeof d.lng === "number") showMapG(d.lat, d.lng);
       result.classList.add("show");
       result.scrollIntoView({ behavior: "smooth", block: "start" });
     }

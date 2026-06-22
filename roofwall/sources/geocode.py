@@ -29,7 +29,8 @@ def suggest_addresses(
     key = api_key or os.environ.get("GOOGLE_MAPS_API_KEY")
     if not key or not query or len(query.strip()) < 3:
         return []
-    params = {"address": query, "key": key}
+    # Restrict to the US; CONUS (lower-48) is further enforced by bbox below.
+    params = {"address": query, "key": key, "components": "country:US"}
     try:
         if http_get is not None:
             data = http_get(GEOCODE_URL, params=params, timeout=timeout)
@@ -44,16 +45,31 @@ def suggest_addresses(
         return []
 
     out: list[dict] = []
-    for r in (data.get("results") or [])[:limit]:
+    for r in data.get("results") or []:
         loc = (r.get("geometry") or {}).get("location") or {}
-        if "lat" in loc and "lng" in loc:
-            out.append({
-                "description": r.get("formatted_address", query),
-                "lat": float(loc["lat"]),
-                "lng": float(loc["lng"]),
-                "place_id": r.get("place_id"),
-            })
+        if "lat" not in loc or "lng" not in loc:
+            continue
+        lat, lng = float(loc["lat"]), float(loc["lng"])
+        if not _in_conus(lat, lng):  # drop AK/HI/territories
+            continue
+        out.append({
+            "description": r.get("formatted_address", query),
+            "lat": lat,
+            "lng": lng,
+            "place_id": r.get("place_id"),
+        })
+        if len(out) >= limit:
+            break
     return out
+
+
+# Continental US (lower-48) bounding box.
+_CONUS = (24.0, 49.5, -125.0, -66.9)  # (lat_min, lat_max, lng_min, lng_max)
+
+
+def _in_conus(lat: float, lng: float) -> bool:
+    lat_min, lat_max, lng_min, lng_max = _CONUS
+    return lat_min <= lat <= lat_max and lng_min <= lng <= lng_max
 
 
 class GeocodeError(RuntimeError):
