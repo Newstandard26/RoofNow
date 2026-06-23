@@ -342,6 +342,38 @@ def _seeded_component(region: np.ndarray, center_rc) -> np.ndarray:
     return out
 
 
+def _erode4(r: np.ndarray) -> np.ndarray:
+    """4-connected binary erosion (out-of-bounds treated as background)."""
+    up = np.zeros_like(r); up[1:, :] = r[:-1, :]
+    dn = np.zeros_like(r); dn[:-1, :] = r[1:, :]
+    lf = np.zeros_like(r); lf[:, 1:] = r[:, :-1]
+    rt = np.zeros_like(r); rt[:, :-1] = r[:, 1:]
+    return r & up & dn & lf & rt
+
+
+def _dilate4(r: np.ndarray) -> np.ndarray:
+    """4-connected binary dilation."""
+    out = r.copy()
+    out[1:, :] |= r[:-1, :]
+    out[:-1, :] |= r[1:, :]
+    out[:, 1:] |= r[:, :-1]
+    out[:, :-1] |= r[:, 1:]
+    return out
+
+
+def _open(r: np.ndarray, iters: int = 1) -> np.ndarray:
+    """Binary opening: erode then dilate. Removes thin (<= iters px) necks and
+    spurs that pinch a facet's traced contour into a self-touching star, while
+    keeping the bulk shape/area. Diagram cleanup only (line lengths are measured
+    from the label map + planes, not these polygons)."""
+    e = r
+    for _ in range(iters):
+        e = _erode4(e)
+    for _ in range(iters):
+        e = _dilate4(e)
+    return e
+
+
 def _connected_components(region: np.ndarray):
     """Yield a boolean mask for each 8-connected component of `region` (bool).
 
@@ -468,9 +500,10 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         base = labels == i
         if int(base.sum()) < min_facet_area_px:
             continue
-        # Trace each connected component of the plane's region as its own facet,
-        # so two same-facing roof sections don't fuse into one star-shaped,
-        # self-overlapping polygon.
+        # Open the region first to drop thin necks/spurs that pinch the traced
+        # contour into a self-touching star, then trace each connected component
+        # as its own facet so two same-facing roof sections don't fuse.
+        base = _open(base, 1)
         for ci, comp in enumerate(_connected_components(base)):
             if int(comp.sum()) < min_facet_area_px:
                 continue
