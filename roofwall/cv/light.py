@@ -529,14 +529,18 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         "planes_abc": [[round(p[0], 3), round(p[1], 3), round(p[2], 1)] for p in planes],
         "segs": seg_diag,
     }
-    # TEMP one-time capture: dump the label map (cropped to the roof bbox) so the
-    # diagram segmentation can be iterated offline. Removed in the follow-up fix.
+    # TEMP one-time capture: dump the DSM + mask + label map (cropped to the roof
+    # bbox) so the labeling/diagram can be iterated offline. Removed in the fix.
     import base64 as _b64
     _ys, _xs = np.nonzero(labels >= 0)
     if len(_ys):
         _r0, _r1, _c0, _c1 = int(_ys.min()), int(_ys.max()) + 1, int(_xs.min()), int(_xs.max()) + 1
         _crop = labels[_r0:_r1, _c0:_c1].astype(np.int8)
+        _dsmc = dsm[_r0:_r1, _c0:_c1].astype(np.float32)
+        _maskc = (mask[_r0:_r1, _c0:_c1] > 0).astype(np.uint8)
         debug["labels_b64"] = _b64.b64encode(_crop.tobytes()).decode()
+        debug["dsm_b64"] = _b64.b64encode(_dsmc.tobytes()).decode()
+        debug["mask_b64"] = _b64.b64encode(_maskc.tobytes()).decode()
         debug["labels_shape"] = [int(_crop.shape[0]), int(_crop.shape[1])]
         debug["labels_origin"] = [_r0, _c0]
         debug["transform"] = [transform.x0, transform.y0, transform.res, int(transform.nrows)]
