@@ -342,6 +342,194 @@ def _seeded_component(region: np.ndarray, center_rc) -> np.ndarray:
     return out
 
 
+# ---------- crease-watershed facet segmentation (pure numpy) ----------
+# A roof facet is a smooth surface bounded by creases (ridge/hip/valley/eave,
+# where the DSM bends). Tracing each plane's label set instead gives scattered,
+# self-touching "star" facets on a complex roof. We segment by the creases: a
+# marker-controlled watershed flooded from facet centres (points far from any
+# crease), giving compact facets that tile the roof. Implemented in pure numpy
+# (no scipy/skimage) to stay within the lightweight Vercel function.
+
+def _gauss(a: np.ndarray, sigma: float) -> np.ndarray:
+    """Separable Gaussian blur."""
+    if sigma <= 0:
+        return a
+    rad = max(1, int(3 * sigma))
+    xs = np.arange(-rad, rad + 1)
+    k = np.exp(-(xs * xs) / (2 * sigma * sigma)); k /= k.sum()
+    a = np.apply_along_axis(lambda m: np.convolve(m, k, mode="same"), 1, a)
+    a = np.apply_along_axis(lambda m: np.convolve(m, k, mode="same"), 0, a)
+    return a
+
+
+def _fill_border(dsm: np.ndarray, mask: np.ndarray, iters: int = 6) -> np.ndarray:
+    """Fill just-outside-mask pixels with the nearest in-mask height (a few
+    passes) so DSM gradients at the roof border aren't corrupted by the hole."""
+    f = dsm.copy(); known = mask.copy()
+    h, w = f.shape
+    for _ in range(iters):
+        if known.all():
+            break
+        acc = np.zeros_like(f); cnt = np.zeros_like(f)
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ys = slice(max(0, dy), h + min(0, dy)); ysrc = slice(max(0, -dy), h + min(0, -dy))
+            xs = slice(max(0, dx), w + min(0, dx)); xsrc = slice(max(0, -dx), w + min(0, -dx))
+            s = np.zeros_like(f); k2 = np.zeros_like(known)
+            s[ys, xs] = np.where(known[ysrc, xsrc], f[ysrc, xsrc], 0.0)
+            k2[ys, xs] = known[ysrc, xsrc]
+            acc += s; cnt += k2
+        new = (~known) & (cnt > 0)
+        f[new] = acc[new] / cnt[new]; known |= new
+    return f
+
+
+def _maxfilter_diamond(a: np.ndarray, d: int) -> np.ndarray:
+    """Grey dilation over a diamond of radius d (d 4-connected passes)."""
+    m = a.copy()
+    for _ in range(d):
+        m2 = m.copy()
+        m2[1:, :] = np.maximum(m2[1:, :], m[:-1, :]); m2[:-1, :] = np.maximum(m2[:-1, :], m[1:, :])
+        m2[:, 1:] = np.maximum(m2[:, 1:], m[:, :-1]); m2[:, :-1] = np.maximum(m2[:, :-1], m[:, 1:])
+        m = m2
+    return m
+
+
+def _peaks(flat: np.ndarray, mask: np.ndarray, min_d: int):
+    """Local maxima of `flat` within `mask`, each at least min_d apart (greedy)."""
+    mx = _maxfilter_diamond(np.where(mask, flat, -1e18), min_d)
+    cand = mask & (flat >= mx - 1e-9)
+    ys, xs = np.nonzero(cand)
+    order = np.argsort(-flat[ys, xs])
+    taken = np.zeros(mask.shape, dtype=bool); pts = []
+    for idx in order.tolist():
+        y, x = int(ys[idx]), int(xs[idx])
+        if taken[max(0, y - min_d):y + min_d + 1, max(0, x - min_d):x + min_d + 1].any():
+            continue
+        pts.append((y, x)); taken[y, x] = True
+    return pts
+
+
+def _watershed(pri: np.ndarray, markers: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Marker-controlled watershed (Meyer flooding) on priority `pri`."""
+    import heapq
+    h, w = pri.shape
+    out = markers.copy()
+    inq = markers > 0
+    heap = []; cnt = 0
+    ys, xs = np.nonzero(markers > 0)
+    for y, x in zip(ys.tolist(), xs.tolist()):
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and mask[ny, nx] and out[ny, nx] == 0 and not inq[ny, nx]:
+                heapq.heappush(heap, (float(pri[ny, nx]), cnt, ny, nx)); cnt += 1; inq[ny, nx] = True
+    while heap:
+        _, _, y, x = heapq.heappop(heap)
+        lbl = 0
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and out[ny, nx] > 0:
+                lbl = out[ny, nx]; break
+        out[y, x] = lbl
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            ny, nx = y + dy, x + dx
+            if 0 <= ny < h and 0 <= nx < w and mask[ny, nx] and out[ny, nx] == 0 and not inq[ny, nx]:
+                heapq.heappush(heap, (float(pri[ny, nx]), cnt, ny, nx)); cnt += 1; inq[ny, nx] = True
+    return out
+
+
+def _crease_watershed_facets(dsm, region, transform, planes, Xg, Yg,
+                             simplify_ft, min_area_sqft, *, min_sep_ft=6.5,
+                             slope_tol=0.08, z_tol=2.0):
+    """Segment `region` (one building footprint) into compact facet polygons by
+    its DSM creases. Returns [{"id", "verts"}] ready for snapping/diagram."""
+    ys, xs = np.nonzero(region)
+    if len(ys) == 0:
+        return []
+    r0, r1 = int(ys.min()), int(ys.max()) + 1
+    c0, c1 = int(xs.min()), int(xs.max()) + 1
+    m = region[r0:r1, c0:c1]
+    d = dsm[r0:r1, c0:c1].astype(float)
+    ds = _gauss(_fill_border(d, m), 1.0)
+    gy, gx = np.gradient(ds)
+    crease = _gauss(np.abs(np.gradient(gx, axis=1)) + np.abs(np.gradient(gx, axis=0))
+                    + np.abs(np.gradient(gy, axis=1)) + np.abs(np.gradient(gy, axis=0)), 0.6)
+    cmax = float(crease.max()) if crease.size else 1.0
+    crease = np.where(m, crease, cmax)
+    flat = np.where(m, cmax - crease, -1e18)
+    min_d = max(4, int(round(min_sep_ft / max(transform.res, 1e-6))))
+    pts = _peaks(flat, m, min_d)
+    if not pts:
+        return []
+    markers = np.zeros(m.shape, dtype=int)
+    for k, (y, x) in enumerate(pts, 1):
+        markers[y, x] = k
+    seg = _watershed(crease, markers, m)
+    nreg = int(seg.max())
+    if nreg == 0:
+        return []
+
+    cmw, cmh = c0, r0
+
+    # Fit a plane to each watershed region. Two regions are really one facet when
+    # their fitted planes match (a weak crease split one surface); distinct facets
+    # (real ridge/hip/valley between them) have different planes.
+    fit_of: dict = {}
+    for k in range(1, nreg + 1):
+        rr, cc = np.nonzero(seg == k)
+        if len(rr) == 0:
+            continue
+        wx = Xg[cmh + rr, cmw + cc]; wy = Yg[cmh + rr, cmw + cc]; wz = d[rr, cc]
+        fit_of[k] = _fit_plane(wx, wy, wz) or (0.0, 0.0, float(np.mean(wz)))
+
+    def _similar(p, q):
+        return (abs(p[0] - q[0]) <= slope_tol and abs(p[1] - q[1]) <= slope_tol
+                and abs(p[2] - q[2]) <= z_tol)
+
+    h2, w2 = seg.shape
+    parent = {k: k for k in range(1, nreg + 1)}
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]; a = parent[a]
+        return a
+    for rr in range(h2):
+        for cc in range(w2):
+            a = seg[rr, cc]
+            if a <= 0:
+                continue
+            for dy, dx in ((1, 0), (0, 1)):
+                ny, nx = rr + dy, cc + dx
+                if ny < h2 and nx < w2:
+                    b = seg[ny, nx]
+                    if b > 0 and b != a and find(a) != find(b) \
+                            and _similar(fit_of[a], fit_of[b]):
+                        parent[find(a)] = find(b)
+
+    groups: dict = {}
+    for k in range(1, nreg + 1):
+        groups.setdefault(find(k), []).append(k)
+
+    def plane_for(rm):
+        rr, cc = np.nonzero(rm)
+        wx = Xg[cmh + rr, cmw + cc]; wy = Yg[cmh + rr, cmw + cc]; wz = d[rr, cc]
+        return min(range(len(planes)), key=lambda i: float(np.mean(np.abs(
+            planes[i][0] * wx + planes[i][1] * wy + planes[i][2] - wz))))
+
+    res2 = transform.res * transform.res
+    min_px = max(8, int(min_area_sqft / res2))
+    full = np.zeros(dsm.shape, dtype=bool)
+    facets = []
+    for root, ks in groups.items():
+        small = np.isin(seg, ks)
+        if int(small.sum()) < min_px:
+            continue
+        idx = plane_for(small)
+        full[:] = False; full[r0:r1, c0:c1] = small
+        verts = _trace_region(full, planes[idx], transform, simplify_ft)
+        if len(verts) >= 3 and _poly_area_sqft(verts) >= min_area_sqft:
+            facets.append({"id": f"{idx}.{root}", "verts": verts})
+    return facets
+
+
 def _erode4(r: np.ndarray) -> np.ndarray:
     """4-connected binary erosion (out-of-bounds treated as background)."""
     up = np.zeros_like(r); up[1:, :] = r[:-1, :]
@@ -491,25 +679,17 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     # are solid blobs and shared borders are clean 1-D edges.
     labels = assign_pixels(dsm, mask, planes, transform, max_residual=1e9)
     mask_sqft = float(int((labels >= 0).sum()) * res2)
-    labels = np.where(_seeded_component(labels >= 0, (nrows // 2, ncols // 2)),
-                      labels, -1)
+    component = _seeded_component(labels >= 0, (nrows // 2, ncols // 2))
+    labels = np.where(component, labels, -1)
     labels = _smooth_labels(labels, len(planes), smooth_iters)
 
-    facets = []
-    for i, pid in enumerate(ids):
-        base = labels == i
-        if int(base.sum()) < min_facet_area_px:
-            continue
-        # Open the region first to drop thin necks/spurs that pinch the traced
-        # contour into a self-touching star, then trace each connected component
-        # as its own facet so two same-facing roof sections don't fuse.
-        base = _open(base, 1)
-        for ci, comp in enumerate(_connected_components(base)):
-            if int(comp.sum()) < min_facet_area_px:
-                continue
-            verts = _trace_region(comp, planes[i], transform, simplify_ft)
-            if len(verts) >= 3 and _poly_area_sqft(verts) >= min_facet_area_sqft:
-                facets.append({"id": f"{pid}.{ci}" if ci else pid, "verts": verts})
+    # Diagram facets: segment the building by its DSM creases (a marker-controlled
+    # watershed) into compact, tiling facet polygons. This replaces tracing each
+    # plane's label set, which on a complex roof scatters into self-touching
+    # "stars". Line lengths below are still measured from `labels` + plane
+    # geometry and are unaffected by this.
+    facets = _crease_watershed_facets(dsm, component, transform, planes, Xg, Yg,
+                                      simplify_ft, min_facet_area_sqft)
     snapped = snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
     # Line lengths from the plane geometry (accurate even when facets don't
     # weld); imported lazily to avoid a module import cycle.
@@ -529,21 +709,6 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         "planes_abc": [[round(p[0], 3), round(p[1], 3), round(p[2], 1)] for p in planes],
         "segs": seg_diag,
     }
-    # TEMP one-time capture: dump the DSM + mask + label map (cropped to the roof
-    # bbox) so the labeling/diagram can be iterated offline. Removed in the fix.
-    import base64 as _b64
-    _ys, _xs = np.nonzero(labels >= 0)
-    if len(_ys):
-        _r0, _r1, _c0, _c1 = int(_ys.min()), int(_ys.max()) + 1, int(_xs.min()), int(_xs.max()) + 1
-        _crop = labels[_r0:_r1, _c0:_c1].astype(np.int8)
-        _dsmc = dsm[_r0:_r1, _c0:_c1].astype(np.float32)
-        _maskc = (mask[_r0:_r1, _c0:_c1] > 0).astype(np.uint8)
-        debug["labels_b64"] = _b64.b64encode(_crop.tobytes()).decode()
-        debug["dsm_b64"] = _b64.b64encode(_dsmc.tobytes()).decode()
-        debug["mask_b64"] = _b64.b64encode(_maskc.tobytes()).decode()
-        debug["labels_shape"] = [int(_crop.shape[0]), int(_crop.shape[1])]
-        debug["labels_origin"] = [_r0, _c0]
-        debug["transform"] = [transform.x0, transform.y0, transform.res, int(transform.nrows)]
     return snapped, lines, debug
 
 
