@@ -7,3 +7,5 @@ requests>=2.31
 numpy>=1.26
 tifffile>=2024.1.30
 contourpy>=1.2
+# Graph-cut (alpha-expansion) for coherent roof-plane labelling — ~4 MB.
+PyMaxflow>=1.3.0
