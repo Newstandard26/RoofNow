@@ -623,10 +623,61 @@ def _smooth_labels(labels, nplanes, iters=2):
     return L
 
 
+def _pearl_labels(dsm, region, transform, Xg, Yg, planes, *,
+                  lam=1.0, iters=4, rmax=6.0):
+    """Coherent plane labelling by graph-cut energy minimization (PEARL).
+
+    Greedy nearest-plane labelling has no spatial term, so on a complex roof one
+    plane wins scattered pixels and facets come out as jagged "stars". Here each
+    footprint pixel is labelled by alpha-expansion minimizing
+        sum_p |plane(l_p) - dsm_p|  +  lam * sum_{p~q} [l_p != l_q]
+    i.e. a data term (height residual to the plane) plus a Potts spatial-
+    smoothness term that forces compact, contiguous facets with clean borders.
+    Planes are refit to their pixels between passes (the EM step of PEARL).
+    Returns (full-grid labels, refined planes). Falls back to greedy if
+    PyMaxflow is unavailable.
+    """
+    full = np.full(dsm.shape, -1, dtype=int)
+    ys, xs = np.nonzero(region)
+    if len(ys) == 0:
+        return full, planes
+    try:
+        import maxflow.fastmin as _fm
+    except Exception:  # noqa: BLE001 - degrade gracefully if the dep is missing
+        labels = assign_pixels(dsm, region.astype("uint8"), planes, transform, 1e9)
+        return labels, planes
+
+    r0, r1 = int(ys.min()), int(ys.max()) + 1
+    c0, c1 = int(xs.min()), int(xs.max()) + 1
+    m = region[r0:r1, c0:c1]
+    X = Xg[r0:r1, c0:c1]; Y = Yg[r0:r1, c0:c1]; Z = dsm[r0:r1, c0:c1]
+    P = [list(p) for p in planes]
+    L = len(P)
+    V = (lam * (1.0 - np.eye(L)))
+    lab = None
+    for _ in range(max(1, iters)):
+        Dc = np.empty((m.shape[0], m.shape[1], L), dtype=np.float64)
+        for l, (a, b, c) in enumerate(P):
+            Dc[:, :, l] = np.minimum(np.abs(a * X + b * Y + c - Z), rmax)
+        Dc[~m, :] = 0.0                       # outside footprint: neutral
+        lab = _fm.aexpansion_grid(np.ascontiguousarray(Dc), V).astype(int)
+        lab = np.where(m, lab, -1)
+        refit = []
+        for l in range(L):
+            sel = lab == l
+            refit.append(list(_fit_plane(X[sel], Y[sel], Z[sel]) or P[l])
+                         if int(sel.sum()) >= 20 else P[l])
+        if refit == P:
+            break
+        P = refit
+    full[r0:r1, c0:c1] = lab
+    return full, [tuple(p) for p in P]
+
+
 def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft=1.8,
                   snap_tol=2.5, edge_tol=1.5, min_facet_area_px=24,
                   min_facet_area_sqft=25.0, min_keep_sqft=40.0, refine_iters=4,
-                  smooth_iters=4):
+                  smooth_iters=4, pearl_lambda=1.8):
     """DSM + Solar plane priors -> snapped facet polygons.
 
     The Solar priors are only an initialization: their pitch/azimuth/height are
@@ -672,24 +723,38 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         planes = [planes[i] for i in keep]
         ids = [ids[i] for i in keep]
 
-    # Final measurement labels: fill EVERY building pixel to its nearest plane
-    # (drop the residual cutoff so there are no interior holes), restrict to the
-    # building under the query point so neighbouring structures in the 50 m tile
-    # don't inflate area or spawn phantom edges, then majority-smooth so facets
-    # are solid blobs and shared borders are clean 1-D edges.
-    labels = assign_pixels(dsm, mask, planes, transform, max_residual=1e9)
-    mask_sqft = float(int((labels >= 0).sum()) * res2)
-    component = _seeded_component(labels >= 0, (nrows // 2, ncols // 2))
-    labels = np.where(component, labels, -1)
+    # Isolate the queried building (drop neighbouring structures in the 50 m
+    # tile so they don't inflate area or spawn phantom edges).
+    filled = assign_pixels(dsm, mask, planes, transform, max_residual=1e9)
+    mask_sqft = float(int((filled >= 0).sum()) * res2)
+    component = _seeded_component(filled >= 0, (nrows // 2, ncols // 2))
+
+    # MEASUREMENT labels (line lengths): nearest-plane fill + majority smooth.
+    # These are measured edge-by-edge against the plane intersections; the raw
+    # (slightly jagged) borders capture true ridge/hip/valley length well, so
+    # this is kept as the validated source for line_lengths below.
+    labels = np.where(component, filled, -1)
     labels = _smooth_labels(labels, len(planes), smooth_iters)
 
-    # Diagram facets: segment the building by its DSM creases (a marker-controlled
-    # watershed) into compact, tiling facet polygons. This replaces tracing each
-    # plane's label set, which on a complex roof scatters into self-touching
-    # "stars". Line lengths below are still measured from `labels` + plane
-    # geometry and are unaffected by this.
-    facets = _crease_watershed_facets(dsm, component, transform, planes, Xg, Yg,
-                                      simplify_ft, min_facet_area_sqft)
+    # DIAGRAM labels: PEARL graph-cut labelling adds a spatial-smoothness term,
+    # yielding a clean, coherent partition (compact facets, no scattered "star")
+    # for the roof plan. Decoupled from measurement so the validated line lengths
+    # don't change. Trace each plane's connected components into facet polygons.
+    dlabels, dplanes = _pearl_labels(dsm, component, transform, Xg, Yg, planes,
+                                     lam=pearl_lambda, iters=4)
+    dlabels = _smooth_labels(dlabels, len(dplanes), 1)
+    facets = []
+    for i in range(len(dplanes)):
+        base = dlabels == i
+        if int(base.sum()) < min_facet_area_px:
+            continue
+        base = _open(base, 1)
+        for ci, comp in enumerate(_connected_components(base)):
+            if int(comp.sum()) < min_facet_area_px:
+                continue
+            verts = _trace_region(comp, dplanes[i], transform, simplify_ft)
+            if len(verts) >= 3 and _poly_area_sqft(verts) >= min_facet_area_sqft:
+                facets.append({"id": f"{i}.{ci}" if ci else str(i), "verts": verts})
     snapped = snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
     # Line lengths from the plane geometry (accurate even when facets don't
     # weld); imported lazily to avoid a module import cycle.
