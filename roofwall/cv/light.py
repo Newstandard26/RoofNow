@@ -623,6 +623,127 @@ def _smooth_labels(labels, nplanes, iters=2):
     return L
 
 
+def _largest_component(region: np.ndarray) -> np.ndarray:
+    """Boolean mask of the largest 8-connected component of `region`."""
+    best = None
+    best_n = 0
+    for comp in _connected_components(region):
+        n = int(comp.sum())
+        if n > best_n:
+            best_n, best = n, comp
+    return best if best is not None else np.zeros_like(region, dtype=bool)
+
+
+def _fill_holes(region: np.ndarray) -> np.ndarray:
+    """Fill interior holes of `region` (background pixels unreachable from the
+    array border) so a facet trace doesn't carve a donut around a vent/AC unit."""
+    from collections import deque
+
+    h, w = region.shape
+    bg = np.zeros_like(region, dtype=bool)
+    dq = deque()
+    for r in range(h):
+        for c in (0, w - 1):
+            if not region[r, c] and not bg[r, c]:
+                bg[r, c] = True
+                dq.append((r, c))
+    for c in range(w):
+        for r in (0, h - 1):
+            if not region[r, c] and not bg[r, c]:
+                bg[r, c] = True
+                dq.append((r, c))
+    while dq:
+        r, c = dq.popleft()
+        for nr, nc in ((r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)):
+            if 0 <= nr < h and 0 <= nc < w and not region[nr, nc] and not bg[nr, nc]:
+                bg[nr, nc] = True
+                dq.append((nr, nc))
+    return region | ~bg
+
+
+def _flood_fill_orphans(clean: np.ndarray, component: np.ndarray) -> None:
+    """In place: assign every still-unlabelled footprint pixel to its nearest
+    labelled facet (multi-source 4-connected BFS) so the facets tile the roof."""
+    from collections import deque
+
+    h, w = clean.shape
+    dq = deque(zip(*np.nonzero(clean >= 0)))
+    while dq:
+        r, c = dq.popleft()
+        lab = clean[r, c]
+        for nr, nc in ((r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)):
+            if 0 <= nr < h and 0 <= nc < w and component[nr, nc] and clean[nr, nc] < 0:
+                clean[nr, nc] = lab
+                dq.append((nr, nc))
+
+
+def _coherent_facets(dlabels, dplanes, component, dsm, Xg, Yg, transform, *,
+                     simplify_ft, min_facet_area_px, min_facet_area_sqft,
+                     open_iters=2, grow_iters=2):
+    """Turn the (coherent) PEARL label map into clean, compact facet polygons.
+
+    The PEARL partition is spatially smooth but a facet's label can still send a
+    thin tendril into a busy ridge junction, which pinches an independent trace
+    into a self-touching "star". Per label we keep its largest component, OPEN it
+    (erode/dilate by ``open_iters``) to sever those tendrils, then build one
+    gap-free, footprint-tiling label map: pixels orphaned by the opening are
+    re-assigned to the nearest facet, and any leftover sub-threshold strips are
+    dissolved into their neighbours. Each facet is then traced and grown a couple
+    of pixels (``grow_iters``) so neighbours overlap by a hair instead of leaving
+    hairline gaps at the staircase boundary — snap_model welds the shared verts.
+    """
+    h, w = dlabels.shape
+    res2 = transform.res * transform.res
+    clean = np.full((h, w), -1, dtype=int)
+    best = np.full((h, w), np.inf, dtype=float)
+    for i in range(len(dplanes)):
+        m = _largest_component(dlabels == i)
+        if int(m.sum()) < min_facet_area_px:
+            continue
+        for _ in range(open_iters):
+            m = _erode4(m)
+        m = _largest_component(m)
+        for _ in range(open_iters):
+            m = _dilate4(m)
+        m &= component
+        if int(m.sum()) < min_facet_area_px:
+            continue
+        a, b, c = dplanes[i]
+        resid = np.abs(a * Xg + b * Yg + c - dsm)
+        take = m & (resid < best)
+        clean[take] = i
+        best[take] = resid[take]
+    _flood_fill_orphans(clean, component)
+
+    # Dissolve thin sub-threshold strips into their neighbours so no tiny region
+    # drops out of tracing and leaves a wedge gap at a junction.
+    min_px = max(1, int(min_facet_area_sqft / res2))
+    for _ in range(4):
+        kill = np.zeros((h, w), dtype=bool)
+        for i in range(len(dplanes)):
+            for comp in _connected_components(clean == i):
+                if int(comp.sum()) < min_px:
+                    kill |= comp
+        if not kill.any():
+            break
+        clean[kill] = -1
+        _flood_fill_orphans(clean, component)
+
+    facets = []
+    for i in range(len(dplanes)):
+        for ci, comp in enumerate(_connected_components(clean == i)):
+            if int(comp.sum()) * res2 < min_facet_area_sqft:
+                continue
+            comp = _fill_holes(comp)
+            for _ in range(grow_iters):
+                comp = _dilate4(comp)
+            comp &= component
+            verts = _trace_region(comp, dplanes[i], transform, simplify_ft)
+            if len(verts) >= 3 and _poly_area_sqft(verts) >= min_facet_area_sqft:
+                facets.append({"id": f"{i}.{ci}" if ci else str(i), "verts": verts})
+    return facets
+
+
 def _pearl_labels(dsm, region, transform, Xg, Yg, planes, *,
                   lam=1.0, iters=4, rmax=6.0):
     """Coherent plane labelling by graph-cut energy minimization (PEARL).
@@ -739,22 +860,16 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     # DIAGRAM labels: PEARL graph-cut labelling adds a spatial-smoothness term,
     # yielding a clean, coherent partition (compact facets, no scattered "star")
     # for the roof plan. Decoupled from measurement so the validated line lengths
-    # don't change. Trace each plane's connected components into facet polygons.
+    # don't change. _coherent_facets turns that partition into clean, gap-free,
+    # footprint-tiling facet polygons (sever tendrils, dissolve strips, weld).
     dlabels, dplanes = _pearl_labels(dsm, component, transform, Xg, Yg, planes,
                                      lam=pearl_lambda, iters=4)
     dlabels = _smooth_labels(dlabels, len(dplanes), 1)
-    facets = []
-    for i in range(len(dplanes)):
-        base = dlabels == i
-        if int(base.sum()) < min_facet_area_px:
-            continue
-        base = _open(base, 1)
-        for ci, comp in enumerate(_connected_components(base)):
-            if int(comp.sum()) < min_facet_area_px:
-                continue
-            verts = _trace_region(comp, dplanes[i], transform, simplify_ft)
-            if len(verts) >= 3 and _poly_area_sqft(verts) >= min_facet_area_sqft:
-                facets.append({"id": f"{i}.{ci}" if ci else str(i), "verts": verts})
+    dlabels = np.where(component, dlabels, -1)
+    facets = _coherent_facets(dlabels, dplanes, component, dsm, Xg, Yg, transform,
+                              simplify_ft=simplify_ft,
+                              min_facet_area_px=min_facet_area_px,
+                              min_facet_area_sqft=min_facet_area_sqft)
     snapped = snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
     # Line lengths from the plane geometry (accurate even when facets don't
     # weld); imported lazily to avoid a module import cycle.
