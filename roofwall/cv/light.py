@@ -677,20 +677,17 @@ def _flood_fill_orphans(clean: np.ndarray, component: np.ndarray) -> None:
                 dq.append((nr, nc))
 
 
-def _coherent_facets(dlabels, dplanes, component, dsm, Xg, Yg, transform, *,
-                     simplify_ft, min_facet_area_px, min_facet_area_sqft,
-                     open_iters=2, grow_iters=2):
-    """Turn the (coherent) PEARL label map into clean, compact facet polygons.
+def _clean_tiled_labels(dlabels, dplanes, component, dsm, Xg, Yg, transform, *,
+                        min_facet_area_px, min_facet_area_sqft, open_iters=2):
+    """Turn the (coherent) PEARL labels into one gap-free, footprint-tiling map.
 
     The PEARL partition is spatially smooth but a facet's label can still send a
-    thin tendril into a busy ridge junction, which pinches an independent trace
-    into a self-touching "star". Per label we keep its largest component, OPEN it
-    (erode/dilate by ``open_iters``) to sever those tendrils, then build one
-    gap-free, footprint-tiling label map: pixels orphaned by the opening are
-    re-assigned to the nearest facet, and any leftover sub-threshold strips are
-    dissolved into their neighbours. Each facet is then traced and grown a couple
-    of pixels (``grow_iters``) so neighbours overlap by a hair instead of leaving
-    hairline gaps at the staircase boundary — snap_model welds the shared verts.
+    thin tendril into a busy ridge junction, which pinches a trace into a self-
+    touching "star". Per label we keep its largest component and OPEN it (erode/
+    dilate by ``open_iters``) to sever those tendrils; pixels orphaned by the
+    opening are re-assigned to the nearest facet (lowest plane residual), and any
+    leftover sub-threshold strips are dissolved into their neighbours. The result
+    is an int label map that tiles ``component`` with compact regions.
     """
     h, w = dlabels.shape
     res2 = transform.res * transform.res
@@ -716,7 +713,7 @@ def _coherent_facets(dlabels, dplanes, component, dsm, Xg, Yg, transform, *,
     _flood_fill_orphans(clean, component)
 
     # Dissolve thin sub-threshold strips into their neighbours so no tiny region
-    # drops out of tracing and leaves a wedge gap at a junction.
+    # drops out and leaves a wedge gap at a junction.
     min_px = max(1, int(min_facet_area_sqft / res2))
     for _ in range(4):
         kill = np.zeros((h, w), dtype=bool)
@@ -728,7 +725,24 @@ def _coherent_facets(dlabels, dplanes, component, dsm, Xg, Yg, transform, *,
             break
         clean[kill] = -1
         _flood_fill_orphans(clean, component)
+    return clean
 
+
+def _coherent_facets(dlabels, dplanes, component, dsm, Xg, Yg, transform, *,
+                     simplify_ft, min_facet_area_px, min_facet_area_sqft,
+                     open_iters=2, grow_iters=2):
+    """Trace the clean tiled label map into compact facet polygons (raster path).
+
+    Fallback for when the vector ``_regularized_facets`` path is unavailable. Each
+    facet is traced and grown a couple of pixels (``grow_iters``) so neighbours
+    overlap by a hair instead of leaving hairline gaps at the staircase boundary;
+    snap_model then welds the shared verts.
+    """
+    res2 = transform.res * transform.res
+    clean = _clean_tiled_labels(dlabels, dplanes, component, dsm, Xg, Yg, transform,
+                                min_facet_area_px=min_facet_area_px,
+                                min_facet_area_sqft=min_facet_area_sqft,
+                                open_iters=open_iters)
     facets = []
     for i in range(len(dplanes)):
         for ci, comp in enumerate(_connected_components(clean == i)):
@@ -741,6 +755,246 @@ def _coherent_facets(dlabels, dplanes, component, dsm, Xg, Yg, transform, *,
             verts = _trace_region(comp, dplanes[i], transform, simplify_ft)
             if len(verts) >= 3 and _poly_area_sqft(verts) >= min_facet_area_sqft:
                 facets.append({"id": f"{i}.{ci}" if ci else str(i), "verts": verts})
+    return facets
+
+
+def _boundary_chains(clean):
+    """Vectorise the tiled label map into boundary chains between junction nodes.
+
+    A chain is a maximal run of unit pixel-edges separating the same pair of
+    regions; nodes are pixel corners where != 2 chains meet. Returns
+    (chains, nodes) where each chain is a dict with corner-coords path ``p``,
+    endpoints ``n0``/``n1`` and the region labels on each side (``L`` along
+    n0->n1, ``R`` the other side). Background is label -1.
+    """
+    from collections import defaultdict
+
+    h, w = clean.shape
+
+    def lab(r, c):
+        return int(clean[r, c]) if (0 <= r < h and 0 <= c < w) else -1
+
+    adj = defaultdict(set)
+    side = {}
+
+    def ae(a, b, left, right):
+        adj[a].add(b)
+        adj[b].add(a)
+        side[(a, b)] = left
+        side[(b, a)] = right
+
+    for r in range(h):
+        for c in range(w + 1):
+            lft, rgt = lab(r, c - 1), lab(r, c)
+            if lft != rgt:
+                ae((r, c), (r + 1, c), rgt, lft)
+    for r in range(h + 1):
+        for c in range(w):
+            top, bot = lab(r - 1, c), lab(r, c)
+            if top != bot:
+                ae((r, c), (r, c + 1), top, bot)
+
+    nodes = {p for p in adj if len(adj[p]) != 2}
+
+    def walk(s, n):
+        path = [s, n]
+        prev, cur = s, n
+        while cur not in nodes:
+            nb = [x for x in adj[cur] if x != prev]
+            if len(nb) != 1:
+                break
+            prev, cur = cur, nb[0]
+            path.append(cur)
+        return path
+
+    chains = []
+    seen = set()
+    for nd in nodes:
+        for nb in adj[nd]:
+            if frozenset((nd, nb)) in seen:
+                continue
+            p = walk(nd, nb)
+            for i in range(len(p) - 1):
+                seen.add(frozenset((p[i], p[i + 1])))
+            chains.append({"p": p, "n0": p[0], "n1": p[-1],
+                           "L": side[(p[0], p[1])], "R": side[(p[1], p[0])]})
+    for e in list(side):  # closed loops with no junction
+        a, b = e
+        if frozenset((a, b)) in seen:
+            continue
+        p = walk(a, b)
+        for i in range(len(p) - 1):
+            seen.add(frozenset((p[i], p[i + 1])))
+        chains.append({"p": p, "n0": p[0], "n1": p[-1],
+                       "L": side[(p[0], p[1])], "R": side[(p[1], p[0])]})
+    return chains, nodes
+
+
+def _face_label(face, clean, transform):
+    """Majority clean-label of the pixels under a polygon `face` (or None)."""
+    from collections import defaultdict
+    from shapely.geometry import Point
+
+    h, w = clean.shape
+    minx, miny, maxx, maxy = face.bounds
+    votes = defaultdict(int)
+    samples = [face.representative_point()]
+    for fx in (0.2, 0.4, 0.6, 0.8):
+        for fy in (0.2, 0.4, 0.6, 0.8):
+            samples.append(Point(minx + (maxx - minx) * fx, miny + (maxy - miny) * fy))
+    for pt in samples:
+        if not face.contains(pt):
+            continue
+        col = int(round((pt.x - transform.x0) / transform.res))
+        row = int(round((transform.nrows - 1) - (pt.y - transform.y0) / transform.res))
+        if 0 <= row < h and 0 <= col < w and clean[row, col] >= 0:
+            votes[int(clean[row, col])] += 1
+    return max(votes, key=votes.get) if votes else None
+
+
+def _regularized_facets(clean, dplanes, component, transform, *, simplify_ft,
+                        min_facet_area_sqft):
+    """Vector roof plan with straight, shared edges via a plane-line arrangement.
+
+    The clean raster only tells us *which* plane owns each pixel; this turns that
+    into clean geometry. Every real facet adjacency contributes the exact
+    plane-intersection line of the two planes (the true ridge/hip/valley); each is
+    extended to a full chord and clipped to the regularized footprint polygon. The
+    footprint boundary + all chords are noded and ``polygonize``d into a watertight
+    arrangement that tiles the roof with straight edges. Each cell is labelled by
+    majority vote of the clean labels under it, then same-label cells are merged
+    (``unary_union``) into the final facet polygons — so coverage is complete (no
+    holes) and edges are straight. Returns [] if shapely is unavailable so the
+    caller can fall back to the raster trace.
+    """
+    try:
+        from shapely.geometry import LineString, Polygon
+        from shapely.ops import polygonize, unary_union
+    except Exception:
+        return []
+    from collections import defaultdict
+
+    # regularized footprint polygon (single outer ring, holes filled)
+    fp = _trace_region(_fill_holes(component), (0.0, 0.0, 0.0), transform, simplify_ft)
+    if len(fp) < 3:
+        return []
+    foot = Polygon([(x, y) for x, y, _ in fp]).buffer(0)
+    if foot.is_empty or foot.area <= 0:
+        return []
+    if foot.geom_type == "MultiPolygon":
+        foot = max(foot.geoms, key=lambda g: g.area)
+
+    # plane-intersection chords for every real facet adjacency, clipped to foot
+    chains, _ = _boundary_chains(clean)
+    pairs = set()
+    for ch in chains:
+        i, j = sorted((ch["L"], ch["R"]))
+        if i >= 0 and j >= 0:
+            pairs.add((i, j))
+    minx, miny, maxx, maxy = foot.bounds
+    diag = math.hypot(maxx - minx, maxy - miny) * 1.2 + 1.0
+    cx, cy = (minx + maxx) / 2.0, (miny + maxy) / 2.0
+    chords = []
+    for i, j in pairs:
+        ai, bi, ci = dplanes[i]
+        aj, bj, cj = dplanes[j]
+        A, B, C = ai - aj, bi - bj, ci - cj
+        n = math.hypot(A, B)
+        if n < 1e-6:                      # near-parallel planes: no usable line
+            continue
+        # foot of perpendicular from (cx,cy) to the line, then march along it
+        t = (A * cx + B * cy + C) / (n * n)
+        px, py = cx - A * t, cy - B * t
+        dx, dy = -B / n, A / n
+        seg = LineString([(px - dx * diag, py - dy * diag),
+                          (px + dx * diag, py + dy * diag)]).intersection(foot)
+        if seg.is_empty:
+            continue
+        if seg.geom_type == "LineString":
+            chords.append(seg)
+        elif seg.geom_type == "MultiLineString":
+            chords.extend(list(seg.geoms))
+
+    faces = list(polygonize(unary_union([foot.boundary] + chords)))
+    if not faces:
+        return []
+
+    by_label = defaultdict(list)
+    for f in faces:
+        if f.area < 1.0:
+            continue
+        lid = _face_label(f, clean, transform)
+        if lid is not None:
+            by_label[lid].append(f)
+
+    # merge same-label cells into facet parts [lid, polygon]
+    parts = []
+    for lid, fs in by_label.items():
+        merged = unary_union(fs)
+        for g in (merged.geoms if merged.geom_type == "MultiPolygon" else [merged]):
+            if not g.is_empty and g.area > 0:
+                parts.append([lid, g])
+    if not parts:
+        return []
+
+    def longest_shared_neighbour(geom, exclude=None):
+        best, best_len = -1, -1.0
+        for k, (_, g) in enumerate(parts):
+            if k == exclude or g is None:
+                continue
+            try:
+                shared = geom.boundary.intersection(g.boundary).length
+            except Exception:
+                shared = 0.0
+            if shared > best_len:
+                best_len, best = shared, k
+        return best
+
+    # absorb any footprint area not covered by a facet into its longest neighbour
+    covered = unary_union([g for _, g in parts])
+    leftover = foot.difference(covered)
+    slivers = (list(leftover.geoms) if leftover.geom_type == "MultiPolygon"
+               else ([leftover] if not leftover.is_empty else []))
+    for s in slivers:
+        if s.area <= 0:
+            continue
+        k = longest_shared_neighbour(s)
+        if k >= 0:
+            parts[k][1] = unary_union([parts[k][1], s])
+
+    # dissolve any remaining sub-min facet into its longest neighbour
+    for _ in range(3):
+        order = sorted(range(len(parts)), key=lambda k: parts[k][1].area)
+        changed = False
+        for k in order:
+            if parts[k][1] is None or parts[k][1].area >= min_facet_area_sqft:
+                continue
+            nb = longest_shared_neighbour(parts[k][1], exclude=k)
+            if nb >= 0:
+                parts[nb][1] = unary_union([parts[nb][1], parts[k][1]])
+                parts[k][1] = None
+                changed = True
+        parts = [p for p in parts if p[1] is not None]
+        if not changed:
+            break
+
+    facets = []
+    counters = defaultdict(int)
+    for lid, g in parts:
+        if g.is_empty or g.area < min_facet_area_sqft:
+            continue
+        for gg in (g.geoms if g.geom_type == "MultiPolygon" else [g]):
+            gg = gg.simplify(max(simplify_ft * 0.6, 0.5))
+            if gg.is_empty or gg.area < min_facet_area_sqft:
+                continue
+            plane = dplanes[lid]
+            verts = [(x, y, plane_z(plane, x, y)) for x, y in list(gg.exterior.coords)[:-1]]
+            if len(verts) < 3:
+                continue
+            suffix = counters[lid]
+            counters[lid] += 1
+            facets.append({"id": f"{lid}.{suffix}" if suffix else str(lid),
+                           "verts": verts})
     return facets
 
 
@@ -866,11 +1120,27 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
                                      lam=pearl_lambda, iters=4)
     dlabels = _smooth_labels(dlabels, len(dplanes), 1)
     dlabels = np.where(component, dlabels, -1)
-    facets = _coherent_facets(dlabels, dplanes, component, dsm, Xg, Yg, transform,
-                              simplify_ft=simplify_ft,
-                              min_facet_area_px=min_facet_area_px,
-                              min_facet_area_sqft=min_facet_area_sqft)
-    snapped = snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
+    clean = _clean_tiled_labels(dlabels, dplanes, component, dsm, Xg, Yg, transform,
+                                min_facet_area_px=min_facet_area_px,
+                                min_facet_area_sqft=min_facet_area_sqft)
+    # Preferred: a regularized vector roof plan (straight, watertight, shared
+    # edges via shapely). Falls back to raster tracing if shapely is unavailable
+    # or the partition degenerates (too few facets for a multi-plane roof).
+    facets = _regularized_facets(clean, dplanes, component, transform,
+                                 simplify_ft=simplify_ft,
+                                 min_facet_area_sqft=min_facet_area_sqft)
+    roof_area = float(int((clean >= 0).sum()) * res2)
+    covered = sum(_poly_area_sqft(f["verts"]) for f in facets)
+    if facets and covered >= 0.85 * roof_area:
+        # The arrangement already gives shared, straight edges — no snap needed
+        # (snapping would only nudge the exact polygonize vertices apart).
+        snapped = facets
+    else:
+        facets = _coherent_facets(dlabels, dplanes, component, dsm, Xg, Yg, transform,
+                                  simplify_ft=simplify_ft,
+                                  min_facet_area_px=min_facet_area_px,
+                                  min_facet_area_sqft=min_facet_area_sqft)
+        snapped = snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
     # Line lengths from the plane geometry (accurate even when facets don't
     # weld); imported lazily to avoid a module import cycle.
     from roofwall.cv.lines import measure_lines
