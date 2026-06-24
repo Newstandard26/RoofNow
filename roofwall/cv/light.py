@@ -342,6 +342,32 @@ def _seeded_component(region: np.ndarray, center_rc) -> np.ndarray:
     return out
 
 
+def _target_component(region: np.ndarray, center_rc, *, res: float,
+                      max_hole_sqft: float = 150.0) -> np.ndarray:
+    """Robust target-building footprint from the raw Solar mask.
+
+    1. keep only the 8-connected component nearest the queried/centre pixel
+       (drops detached neighbouring houses, garages and sheds in the 50 m tile);
+    2. fill interior holes up to ``max_hole_sqft`` (chimneys, vents, AC units,
+       small DSM dropouts) so a facet isn't carved into a donut, while leaving a
+       genuine courtyard open.
+    Tiny disconnected mask islands are inherently excluded by step 1.
+    """
+    comp = _seeded_component(region, center_rc)
+    if not comp.any():
+        return comp
+    filled = _fill_holes(comp)
+    holes = filled & ~comp
+    if not holes.any():
+        return comp
+    res2 = res * res
+    out = comp.copy()
+    for h in _connected_components(holes):
+        if int(h.sum()) * res2 <= max_hole_sqft:
+            out |= h
+    return out
+
+
 # ---------- crease-watershed facet segmentation (pure numpy) ----------
 # A roof facet is a smooth surface bounded by creases (ridge/hip/valley/eave,
 # where the DSM bends). Tracing each plane's label set instead gives scattered,
@@ -884,7 +910,13 @@ def _regularized_facets(clean, dplanes, component, transform, *, simplify_ft,
     if foot.geom_type == "MultiPolygon":
         foot = max(foot.geoms, key=lambda g: g.area)
 
-    # plane-intersection chords for every real facet adjacency, clipped to foot
+    # plane-intersection chords for every real facet adjacency. The chords are
+    # full lines that OVERSHOOT the footprint (not clipped to it): a clipped chord
+    # ends exactly on the boundary and, on a slightly slanted eave, fails to node
+    # there (float error) so polygonize can't split the facet — overshooting makes
+    # every chord cross the boundary cleanly. Faces outside the footprint stay
+    # open (no closing edge) so polygonize never emits them; we still filter by
+    # containment for safety.
     chains, _ = _boundary_chains(clean)
     pairs = set()
     for ch in chains:
@@ -892,7 +924,7 @@ def _regularized_facets(clean, dplanes, component, transform, *, simplify_ft,
         if i >= 0 and j >= 0:
             pairs.add((i, j))
     minx, miny, maxx, maxy = foot.bounds
-    diag = math.hypot(maxx - minx, maxy - miny) * 1.2 + 1.0
+    diag = math.hypot(maxx - minx, maxy - miny) * 1.5 + 2.0
     cx, cy = (minx + maxx) / 2.0, (miny + maxy) / 2.0
     chords = []
     for i, j in pairs:
@@ -906,16 +938,19 @@ def _regularized_facets(clean, dplanes, component, transform, *, simplify_ft,
         t = (A * cx + B * cy + C) / (n * n)
         px, py = cx - A * t, cy - B * t
         dx, dy = -B / n, A / n
-        seg = LineString([(px - dx * diag, py - dy * diag),
-                          (px + dx * diag, py + dy * diag)]).intersection(foot)
-        if seg.is_empty:
-            continue
-        if seg.geom_type == "LineString":
-            chords.append(seg)
-        elif seg.geom_type == "MultiLineString":
-            chords.extend(list(seg.geoms))
+        line = LineString([(px - dx * diag, py - dy * diag),
+                           (px + dx * diag, py + dy * diag)])
+        if line.intersects(foot):
+            chords.append(line)
 
-    faces = list(polygonize(unary_union([foot.boundary] + chords)))
+    # set_precision snaps the noded network to a fine grid so coincident
+    # intersections fuse reliably before polygonize.
+    try:
+        from shapely import set_precision
+        net = set_precision(unary_union([foot.boundary] + chords), 0.01)
+    except Exception:
+        net = unary_union([foot.boundary] + chords)
+    faces = [f for f in polygonize(net) if foot.contains(f.representative_point())]
     if not faces:
         return []
 
@@ -1064,7 +1099,9 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     Tracing then simplifies edges, drops speck facets (< min_facet_area_sqft),
     and welds shared edges (snap_tol) to close seams between neighbours.
     """
+    n_priors_in = len(priors)
     priors = _merge_priors(priors)
+    n_merged_priors = len(priors)
     planes = [p["abc"] for p in priors]
     ids = [p["id"] for p in priors]
     nrows, ncols = dsm.shape
@@ -1099,10 +1136,13 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         ids = [ids[i] for i in keep]
 
     # Isolate the queried building (drop neighbouring structures in the 50 m
-    # tile so they don't inflate area or spawn phantom edges).
+    # tile so they don't inflate area or spawn phantom edges). The DSM/mask tile
+    # is anchored on the building centre, so the centre pixel is the queried roof;
+    # _target_component keeps that 8-connected component and fills small holes.
     filled = assign_pixels(dsm, mask, planes, transform, max_residual=1e9)
     mask_sqft = float(int((filled >= 0).sum()) * res2)
-    component = _seeded_component(filled >= 0, (nrows // 2, ncols // 2))
+    component = _target_component(filled >= 0, (nrows // 2, ncols // 2),
+                                  res=transform.res)
 
     # MEASUREMENT labels (line lengths): nearest-plane fill + majority smooth.
     # These are measured edge-by-edge against the plane intersections; the raw
@@ -1131,7 +1171,8 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
                                  min_facet_area_sqft=min_facet_area_sqft)
     roof_area = float(int((clean >= 0).sum()) * res2)
     covered = sum(_poly_area_sqft(f["verts"]) for f in facets)
-    if facets and covered >= 0.85 * roof_area:
+    used_fallback = not (facets and covered >= 0.85 * roof_area)
+    if not used_fallback:
         # The arrangement already gives shared, straight edges — no snap needed
         # (snapping would only nudge the exact polygonize vertices apart).
         snapped = facets
@@ -1141,25 +1182,113 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
                                   min_facet_area_px=min_facet_area_px,
                                   min_facet_area_sqft=min_facet_area_sqft)
         snapped = snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
+        covered = sum(_poly_area_sqft(f["verts"]) for f in facets)
     # Line lengths from the plane geometry (accurate even when facets don't
     # weld); imported lazily to avoid a module import cycle.
     from roofwall.cv.lines import measure_lines
     seg_diag: list = []
     lines = measure_lines(labels, planes, transform, mask, dsm=dsm, diag=seg_diag)
-    debug = {
-        "n_planes_kept": len(planes),
-        "n_facets_traced": len(facets),
-        "res_ft": round(transform.res, 3),
+    debug = _recovery_debug(
+        dsm=dsm, mask=mask, transform=transform, planes=planes, component=component,
+        clean=clean, facets=snapped, lines=lines, mask_sqft=mask_sqft,
+        roof_area=roof_area, covered=covered, max_residual=max_residual,
+        n_priors_in=n_priors_in, n_merged_priors=n_merged_priors,
+        used_fallback=used_fallback, Xg=Xg, Yg=Yg, seg_diag=seg_diag)
+    return snapped, lines, debug
+
+
+def _recovery_debug(*, dsm, mask, transform, planes, component, clean, facets, lines,
+                    mask_sqft, roof_area, covered, max_residual, n_priors_in,
+                    n_merged_priors, used_fallback, Xg, Yg, seg_diag):
+    """Assemble the recovery debug payload + confidence warnings and a QA flag.
+
+    We never fabricate geometry: when the DSM is poorly explained by the recovered
+    planes (high residual / unassigned), the facets fragment, or the partition fell
+    back to raster tracing, we surface warnings and downgrade ``qa`` so downstream
+    (and the UI) can flag the result for review instead of trusting it blindly.
+    """
+    res2 = transform.res * transform.res
+    comp_px = int(component.sum())
+    comp_sqft = round(comp_px * res2, 1)
+    # mask area that the target component dropped == detached neighbouring
+    # structures (garages, sheds, the next house) isolated out of the 50 m tile
+    dropped_sqft = round(int(((mask > 0) & ~component).sum()) * res2, 1)
+
+    # how well the planes explain the building: min residual per pixel
+    best_resid = np.full(dsm.shape, np.inf, dtype=float)
+    for a, b, c in planes:
+        best_resid = np.minimum(best_resid, np.abs(a * Xg + b * Yg + c - dsm))
+    comp_resid = best_resid[component] if comp_px else np.array([0.0])
+    mean_resid = float(comp_resid.mean())
+    p95_resid = float(np.percentile(comp_resid, 95)) if comp_px else 0.0
+    unassigned = int((component & (best_resid > max_residual)).sum())
+    unassigned_pct = round(100.0 * unassigned / max(comp_px, 1), 1)
+
+    facet_areas = sorted((round(_poly_area_sqft(f["verts"]), 1) for f in facets),
+                         reverse=True)
+    edge_counts = {k: int(lines.get(k, {}).get("count", 0))
+                   for k in ("ridge", "hip", "valley", "rake", "eave")}
+    n_edges = sum(edge_counts.values())
+    n_facets = len(facets)
+
+    # ---- confidence warnings ----
+    warnings: List[str] = []
+    if n_facets == 0:
+        warnings.append("no_facets_recovered")
+    if unassigned_pct >= 12.0:
+        warnings.append(f"high_unassigned_pixels:{unassigned_pct}pct")
+    if mean_resid >= 1.0 or p95_resid >= max_residual * 1.5:
+        warnings.append(f"noisy_or_obstructed_dsm:mean_resid_{round(mean_resid,2)}ft")
+    if dropped_sqft > 60.0:
+        # we kept one building out of several in the tile (expected, informational)
+        warnings.append("multiple_structures_in_tile")
+    # eave/rake explosion: many short unshared boundary edges per facet means the
+    # facets didn't weld into a coherent skeleton
+    if n_facets and (edge_counts["rake"] + edge_counts["eave"]) > 5 * n_facets:
+        warnings.append("possible_edge_fragmentation")
+    if used_fallback:
+        warnings.append("regularization_fallback")
+    if roof_area > 0 and covered < 0.8 * roof_area:
+        warnings.append(f"low_facet_coverage:{round(100*covered/roof_area)}pct")
+
+    # ---- QA flag ----
+    serious = (n_facets == 0
+               or unassigned_pct >= 25.0
+               or mean_resid >= 2.0
+               or "possible_edge_fragmentation" in warnings
+               or (roof_area > 0 and covered < 0.6 * roof_area))
+    if serious:
+        qa = "low_confidence"
+    elif warnings and warnings != ["multiple_structures_in_tile"]:
+        qa = "review"
+    else:
+        qa = "ok"
+
+    return {
+        "qa": qa,
+        "warnings": warnings,
         "grid": [int(dsm.shape[0]), int(dsm.shape[1])],
-        "roof_area_sqft": round(float(int((labels >= 0).sum()) * res2), 1),
+        "res_ft": round(transform.res, 3),
         "mask_sqft": round(mask_sqft, 1),
-        "facet_areas_sqft": sorted(
-            (round(float(int((labels == i).sum()) * res2), 1) for i in range(len(planes))),
-            reverse=True),
+        "target_component_sqft": comp_sqft,
+        "dropped_structures_sqft": dropped_sqft,
+        "n_merged_priors": n_merged_priors,
+        "n_priors_in": n_priors_in,
+        "n_planes_kept": len(planes),
+        "n_facets": n_facets,
+        "facet_areas_sqft": facet_areas,
+        "roof_area_sqft": round(roof_area, 1),
+        "covered_sqft": round(covered, 1),
+        "coverage_pct": round(100.0 * covered / roof_area, 1) if roof_area else 0.0,
+        "unassigned_pct": unassigned_pct,
+        "mean_residual_ft": round(mean_resid, 2),
+        "p95_residual_ft": round(p95_resid, 2),
+        "edge_counts": edge_counts,
+        "n_edges": n_edges,
+        "used_fallback": used_fallback,
         "planes_abc": [[round(p[0], 3), round(p[1], 3), round(p[2], 1)] for p in planes],
         "segs": seg_diag,
     }
-    return snapped, lines, debug
 
 
 # ---------- orchestrator ----------

@@ -210,16 +210,26 @@ def _recover_in_process(
 
 
 def _geometry_from_model(model) -> dict[str, Any]:
-    """Project a recovered BuildingModel to the UI geometry payload."""
+    """Project a recovered BuildingModel to the UI geometry payload.
+
+    ``recovery_status`` carries the QA verdict from recovery: ``ok:N`` when the
+    geometry is trustworthy, ``review:N`` / ``low_confidence:N`` (N = facet count)
+    when recovery flagged warnings, so the UI can mark the diagram for review
+    instead of presenting low-confidence geometry as fact.
+    """
     from roofwall.report.diagram import from_edge_facets
 
+    debug = getattr(model, "debug", None)
+    qa = (debug or {}).get("qa", "ok")
+    n = len(model.facets)
+    status = f"ok:{n}" if qa == "ok" else f"{qa}:{n}"
     out = {
         "roof_diagram": from_edge_facets(model.to_edge_facets()),
         "line_lengths": model.line_lengths(),
-        "recovery_status": f"ok:{len(model.facets)}",
+        "recovery_status": status,
     }
-    if getattr(model, "debug", None) is not None:
-        out["debug"] = model.debug
+    if debug is not None:
+        out["debug"] = debug
     return out
 
 
@@ -275,11 +285,17 @@ def _recover_geometry_via_service(
             origin=Origin(origin.get("lat", lat), origin.get("lng", lng)),
             source=model_d.get("source", "solar-dsm"),
         )
-        return {
+        debug = data.get("debug")
+        qa = (debug or {}).get("qa", "ok")
+        status = f"ok:{len(facets)}" if qa == "ok" else f"{qa}:{len(facets)}"
+        out = {
             "roof_diagram": from_edge_facets(model.to_edge_facets()),
             "line_lengths": data.get("line_lengths") or model.line_lengths(),
-            "recovery_status": f"ok:{len(facets)}",
+            "recovery_status": data.get("recovery_status") or status,
         }
+        if debug is not None:
+            out["debug"] = debug
+        return out
     except Exception as exc:  # noqa: BLE001
         return _empty_geometry(f"error: {exc}")
 
@@ -383,5 +399,11 @@ def _live_report(
         "walls": walls,
         "line_lengths": line_lengths,
         "recovery_status": recovery_status,
+        # The /api/measure diagram is the Solar roofSegmentStats bounding boxes
+        # (axis-aligned rectangles), NOT recovered geometry — flag it approximate
+        # so the UI doesn't present it as measured linework. The real per-facet
+        # roof comes from /api/recover (recovery_status carries its QA verdict).
         "roof_diagram": _solar_diagram(payload),
+        "roof_diagram_source": "solar_bounding_box",
+        "roof_diagram_approximate": True,
     }
