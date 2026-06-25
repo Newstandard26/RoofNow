@@ -17,7 +17,12 @@ from roofwall.quote.engine import (
     POWERED_BY,
     build_quote,
 )
-from roofwall.quote.funnel import build_email, build_slack_blocks, funnel_lead
+from roofwall.quote.funnel import (
+    build_email,
+    build_slack_blocks,
+    funnel_lead,
+    lead_to_webhook_payload,
+)
 from roofwall.quote.lead import validate_lead
 from roofwall.quote.pricing import (
     DEFAULT_PRICING,
@@ -55,4 +60,5 @@ __all__ = [
     "funnel_lead",
     "build_email",
     "build_slack_blocks",
+    "lead_to_webhook_payload",
 ]

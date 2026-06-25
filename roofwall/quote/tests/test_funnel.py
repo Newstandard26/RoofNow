@@ -5,7 +5,14 @@ from roofwall.quote.funnel import (
     build_email,
     build_slack_blocks,
     funnel_lead,
+    lead_to_webhook_payload,
 )
+
+_LEAD_FULL = {
+    "name": "Jane Roof", "first_name": "Jane", "last_name": "Roof",
+    "email": "jane@example.com", "phone": "5551234567",
+    "address": "1 Oak St, Springfield", "tier": "better",
+}
 
 _LEAD = {
     "name": "Jane Roof", "first_name": "Jane", "last_name": "Roof",
@@ -41,6 +48,39 @@ def test_build_slack_blocks_shape():
     assert "high" in payload["text"]
 
 
+def test_webhook_payload_is_crm_ready():
+    p = lead_to_webhook_payload(_LEAD_FULL, _QUOTE)
+    # contact fields map straight onto AccuLynx / LeadConnector
+    assert p["first_name"] == "Jane" and p["last_name"] == "Roof"
+    assert p["email"] == "jane@example.com" and p["phone"] == "5551234567"
+    assert p["address"] == "1 Oak St, Springfield"
+    # quote -> CRM custom fields
+    assert p["estimate_low"] == 12000 and p["estimate_high"] == 21000
+    assert p["estimate_amount"] == "$12,000 – $21,000"
+    assert p["confidence_band"] == "high"
+    assert p["capture_confidence"] == "Complete"   # high -> Complete
+    assert p["lead_priority"] == "Hot"
+    # routing defaults
+    assert p["source"] == "RoofNow Instant Quote"
+    assert p["service_needed"] == "Roof Replacement"
+    assert p["pipeline_stage"] == "New Lead"
+
+
+def test_webhook_payload_band_mapping():
+    low_quote = {"price_range": {"low": 1, "high": 2, "display": "$1 – $2"},
+                 "confidence": {"band": "low", "confidence_pct": 40}}
+    p = lead_to_webhook_payload(_LEAD_FULL, low_quote)
+    assert p["capture_confidence"] == "Needs Review"
+    assert p["lead_priority"] == "Cold"
+
+
+def test_webhook_payload_without_quote():
+    p = lead_to_webhook_payload(_LEAD_FULL, None)
+    assert p["first_name"] == "Jane"
+    assert p["capture_confidence"] is None
+    assert p["source"] == "RoofNow Instant Quote"
+
+
 def test_funnel_skips_when_nothing_configured(monkeypatch):
     for var in ("LEAD_WEBHOOK_URL", "SLACK_WEBHOOK_URL", "SMTP_HOST"):
         monkeypatch.delenv(var, raising=False)
@@ -73,7 +113,8 @@ def test_funnel_webhook_dispatched(monkeypatch):
     assert results["webhook"] == "sent"
     assert sent["url"] == "https://hooks.example.com/x"
     assert sent["json"]["email"] == "jane@example.com"
-    assert sent["json"]["quote"]["price_range"]["low"] == 12000
+    assert sent["json"]["estimate_low"] == 12000
+    assert sent["json"]["capture_confidence"] == "Complete"
 
 
 def test_funnel_never_raises_on_sink_error(monkeypatch):

@@ -6,7 +6,12 @@ best-effort (a failure NEVER blocks the lead or the homeowner's quote):
 
     1. Email     -> SMTP   (SMTP_HOST/PORT/USER/PASS, LEAD_NOTIFY_TO/FROM)
     2. Slack     -> Slack Incoming Webhook   (SLACK_WEBHOOK_URL)
-    3. Zapier/CRM-> generic JSON webhook      (LEAD_WEBHOOK_URL)
+    3. Zapier/CRM-> Zapier Catch Hook (LEAD_WEBHOOK_URL) -> AccuLynx + LeadConnector
+
+The Zapier webhook payload is a flat, CRM-ready record (see
+``lead_to_webhook_payload``) whose keys line up 1:1 with the AccuLynx "Create
+Lead" and LeadConnector "Add/Update Contact" actions, so the Catch Hook zap
+needs little/no field massaging. See docs/instant-quote/08_ZAPIER_SETUP.md.
 
 Important: the lead endpoint runs as a Vercel serverless function, so it can't
 use any interactive/desktop integration — each sink uses its own credential
@@ -26,6 +31,59 @@ from email.message import EmailMessage
 from typing import Any, Dict, List, Optional, Tuple
 
 DEFAULT_NOTIFY_TO = "mattk@newstandardrestoration.com"
+
+# Confidence band -> LeadConnector "Capture Confidence" custom-field value.
+_CAPTURE_CONFIDENCE = {"high": "Complete", "medium": "Partial", "low": "Needs Review"}
+# Confidence band -> CRM lead priority.
+_LEAD_PRIORITY = {"high": "Hot", "medium": "Warm", "low": "Cold"}
+
+
+def lead_to_webhook_payload(
+    lead: Dict[str, Any], quote: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Flatten a lead + quote into a CRM-ready record for the Zapier Catch Hook.
+
+    Keys are chosen to drop straight onto the AccuLynx "Create Lead" and
+    LeadConnector "Add/Update Contact" fields (first_name, last_name, email,
+    phone, address, estimate_amount, capture_confidence, …), so the zap maps
+    fields with little/no transformation.
+    """
+    pr = (quote or {}).get("price_range") or {}
+    conf = (quote or {}).get("confidence") or {}
+    band = conf.get("band")
+    low = pr.get("low", lead.get("estimate_low"))
+    high = pr.get("high", lead.get("estimate_high"))
+    estimate_display = pr.get("display")
+    if not estimate_display and (low or high):
+        estimate_display = f"{_money(low)} – {_money(high)}"
+
+    return {
+        # contact
+        "first_name": lead.get("first_name", ""),
+        "last_name": lead.get("last_name", ""),
+        "name": lead.get("name", ""),
+        "email": lead.get("email", ""),
+        "phone": lead.get("phone", ""),
+        "address": lead.get("address", ""),
+        # quote
+        "tier": lead.get("tier"),
+        "estimate_low": low,
+        "estimate_high": high,
+        "estimate_amount": estimate_display,
+        "confidence_band": band,
+        "confidence_pct": conf.get("confidence_pct"),
+        "capture_confidence": _CAPTURE_CONFIDENCE.get(band) if band else None,
+        "lead_priority": _LEAD_PRIORITY.get(band) if band else None,
+        # CRM routing defaults (RoofNow is a website roof-replacement intake form)
+        "source": "RoofNow Instant Quote",
+        "lead_source_detail": "Website Form",
+        "captured_by_agent": "Form",
+        "service_needed": "Roof Replacement",
+        "lead_type": "Residential",
+        "property_type": "Single-Family",
+        "pipeline_stage": "New Lead",
+        "notes": " | ".join(_summary_lines(lead, quote)),
+    }
 
 
 def _money(v: Any) -> str:
@@ -97,13 +155,7 @@ def _send_webhook(lead: Dict[str, Any], quote: Optional[Dict[str, Any]]) -> str:
     try:
         import requests
 
-        payload = dict(lead)
-        if quote:
-            payload["quote"] = {
-                "price_range": quote.get("price_range"),
-                "confidence": quote.get("confidence"),
-            }
-        requests.post(url, json=payload, timeout=5)
+        requests.post(url, json=lead_to_webhook_payload(lead, quote), timeout=5)
         return "sent"
     except Exception as exc:  # noqa: BLE001
         return f"error: {exc}"
