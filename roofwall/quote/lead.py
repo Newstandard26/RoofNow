@@ -26,38 +26,54 @@ def validate_lead(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
     """Validate a lead submission.
 
     Returns ``(lead, errors)``. ``lead`` is the normalized record; when
-    ``errors`` is non-empty the caller should reject with 400. Requires a name,
-    a usable email or phone, and an address.
+    ``errors`` is non-empty the caller should reject with 400.
+
+    The intake form gates the instant quote, so every field is required:
+    first name, last name, property address, phone, AND email.
+
+    A combined ``name`` is also accepted (and split) for backward compatibility.
     """
     errors: List[str] = []
 
-    name = _clean(payload.get("name"))
+    first = _clean(payload.get("first_name"))
+    last = _clean(payload.get("last_name"))
+    # Back-compat: a single "name" field -> split into first/last.
+    if not first and not last and payload.get("name"):
+        parts = _clean(payload.get("name")).split()
+        if parts:
+            first = parts[0]
+            last = " ".join(parts[1:])
+
     email = _clean(payload.get("email")).lower()
     phone_raw = _clean(payload.get("phone"))
     phone_digits = _PHONE_DIGITS_RE.sub("", phone_raw)
     address = _clean(payload.get("address"), limit=300)
     tier = _clean(payload.get("tier")).lower()
 
-    if not name:
-        errors.append("Name is required.")
+    if not first:
+        errors.append("First name is required.")
+    if not last:
+        errors.append("Last name is required.")
     if not address:
         errors.append("Property address is required.")
-
-    has_email = bool(email)
-    has_phone = bool(phone_digits)
-    if not has_email and not has_phone:
-        errors.append("An email or phone number is required.")
-    if has_email and not _EMAIL_RE.match(email):
-        errors.append("Email address looks invalid.")
-    if has_phone and len(phone_digits) < 10:
+    if not phone_digits:
+        errors.append("Phone number is required.")
+    elif len(phone_digits) < 10:
         errors.append("Phone number looks too short.")
+    if not email:
+        errors.append("Email address is required.")
+    elif not _EMAIL_RE.match(email):
+        errors.append("Email address looks invalid.")
 
     if tier and tier not in _VALID_TIERS:
         # A bad tier isn't fatal — just drop it rather than block the lead.
         tier = ""
 
+    full_name = " ".join(p for p in (first, last) if p)
     lead: Dict[str, Any] = {
-        "name": name,
+        "first_name": first,
+        "last_name": last,
+        "name": full_name,
         "email": email,
         "phone": phone_digits,
         "address": address,

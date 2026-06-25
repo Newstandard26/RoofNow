@@ -8,12 +8,8 @@
     "api/facets.py": { "includeFiles": "roofwall/**" },
     "api/suggest.py": { "includeFiles": "roofwall/**" },
     "api/config.py": { "includeFiles": "roofwall/**" },
-    "api/instant_quote.py": { "includeFiles": "roofwall/**" },
     "api/lead.py": { "includeFiles": "roofwall/**" }
   },
-  "rewrites": [
-    { "source": "/api/instant-quote", "destination": "/api/instant_quote" }
-  ],
   "headers": [
     {
       "source": "/",

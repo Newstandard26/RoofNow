@@ -24,6 +24,7 @@ from roofwall.quote.pricing import (
     DEFAULT_PRICING,
     PricingConfig,
     estimate_tiers,
+    load_pricing,
 )
 
 BRAND = "RoofNow"
@@ -55,9 +56,12 @@ def build_quote(
 ) -> Dict[str, Any]:
     """Build the instant quote from a measurement report dict.
 
-    ``report`` is the output of :func:`roofwall.app.measure_address`.
+    ``report`` is the output of :func:`roofwall.app.measure_address`. When
+    ``config`` is omitted the active rate card is resolved via
+    :func:`roofwall.quote.pricing.load_pricing` (env var / config file /
+    defaults), so prices are editable without a code change.
     """
-    config = config or DEFAULT_PRICING
+    config = config or load_pricing()
     roof = report.get("roof") or {}
 
     confidence = assess(report)

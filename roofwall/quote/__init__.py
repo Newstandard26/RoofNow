@@ -17,13 +17,18 @@ from roofwall.quote.engine import (
     POWERED_BY,
     build_quote,
 )
+from roofwall.quote.funnel import build_email, build_slack_blocks, funnel_lead
+from roofwall.quote.lead import validate_lead
 from roofwall.quote.pricing import (
     DEFAULT_PRICING,
     PricingConfig,
     TierEstimate,
     TierSpec,
     complexity_multiplier,
+    config_from_dict,
+    config_to_dict,
     estimate_tiers,
+    load_pricing,
     parse_pitch_rise,
     pitch_multiplier,
 )
@@ -43,4 +48,11 @@ __all__ = [
     "DEFAULT_PRICING",
     "TierEstimate",
     "TierSpec",
+    "config_from_dict",
+    "config_to_dict",
+    "load_pricing",
+    "validate_lead",
+    "funnel_lead",
+    "build_email",
+    "build_slack_blocks",
 ]

@@ -22,7 +22,9 @@ measurement pipeline or any network call.
 
 from __future__ import annotations
 
+import json
 import math
+import os
 import re
 from dataclasses import dataclass, field, replace
 from typing import Dict, List, Optional, Tuple
@@ -107,6 +109,108 @@ DEFAULT_PRICING = PricingConfig(
     ),
     complexity_multipliers={"Simple": 1.00, "Normal": 1.08, "Complex": 1.18},
 )
+
+
+# --------------------------------------------------------------------------- #
+# Fully-editable pricing: load a rate card from JSON (env var or file) so the
+# numbers can change with NO code edit or redeploy of the engine.
+# --------------------------------------------------------------------------- #
+
+
+def config_to_dict(config: PricingConfig) -> Dict:
+    """Serialize a PricingConfig to a plain dict (round-trips with from_dict)."""
+    return {
+        "tiers": [
+            {
+                "key": t.key,
+                "name": t.name,
+                "blurb": t.blurb,
+                "rate_per_square": t.rate_per_square,
+                "features": list(t.features),
+            }
+            for t in config.tiers
+        ],
+        "pitch_multipliers": [[int(r), float(m)] for r, m in config.pitch_multipliers],
+        "complexity_multipliers": dict(config.complexity_multipliers),
+        "base_spread_pct": config.base_spread_pct,
+        "minimum_job_price": config.minimum_job_price,
+    }
+
+
+def config_from_dict(data: Dict, *, base: PricingConfig = DEFAULT_PRICING) -> PricingConfig:
+    """Build a PricingConfig from a (possibly partial) dict.
+
+    Any key omitted falls back to ``base`` (the defaults), so an operator can
+    override just the Good rate, or just the minimum, without restating the
+    whole rate card. ``tiers``, when present, fully replaces the tier list.
+    """
+    if not isinstance(data, dict):
+        raise ValueError("pricing config must be a JSON object")
+
+    if "tiers" in data and data["tiers"] is not None:
+        tiers = tuple(
+            TierSpec(
+                key=str(t["key"]),
+                name=str(t.get("name", t["key"].title())),
+                blurb=str(t.get("blurb", "")),
+                rate_per_square=float(t["rate_per_square"]),
+                features=tuple(t.get("features", ())),
+            )
+            for t in data["tiers"]
+        )
+    else:
+        tiers = base.tiers
+
+    if "pitch_multipliers" in data and data["pitch_multipliers"] is not None:
+        pitch = tuple(sorted(
+            (int(r), float(m)) for r, m in data["pitch_multipliers"]
+        ))
+    else:
+        pitch = base.pitch_multipliers
+
+    complexity = dict(base.complexity_multipliers)
+    if isinstance(data.get("complexity_multipliers"), dict):
+        complexity.update({k: float(v) for k, v in data["complexity_multipliers"].items()})
+
+    return PricingConfig(
+        tiers=tiers,
+        pitch_multipliers=pitch,
+        complexity_multipliers=complexity,
+        base_spread_pct=float(data.get("base_spread_pct", base.base_spread_pct)),
+        minimum_job_price=float(data.get("minimum_job_price", base.minimum_job_price)),
+    )
+
+
+# Default config-file path, relative to the repo root (two levels up from here).
+_DEFAULT_PRICING_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "pricing.config.json"
+)
+
+
+def load_pricing() -> PricingConfig:
+    """Resolve the active rate card. Precedence (first that exists wins):
+
+      1. ``ROOFNOW_PRICING_JSON``  — inline JSON in an env var
+      2. ``ROOFNOW_PRICING_FILE``  — path to a JSON file
+      3. ``pricing.config.json``   — at the repo root, if present
+      4. built-in :data:`DEFAULT_PRICING`
+
+    Any parse/validation error falls back to the defaults rather than breaking
+    the quote endpoint (and logs to stderr).
+    """
+    inline = os.environ.get("ROOFNOW_PRICING_JSON")
+    path = os.environ.get("ROOFNOW_PRICING_FILE") or _DEFAULT_PRICING_FILE
+    try:
+        if inline:
+            return config_from_dict(json.loads(inline))
+        if path and os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as fh:
+                return config_from_dict(json.load(fh))
+    except Exception as exc:  # noqa: BLE001
+        import sys
+        print(f"[pricing] failed to load custom rate card, using defaults: {exc}",
+              file=sys.stderr)
+    return DEFAULT_PRICING
 
 
 @dataclass(frozen=True)

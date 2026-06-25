@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RoofNow — What's Your Roof Replacement Likely to Cost?</title>
-  <meta name="description" content="Get an instant roof replacement estimate from just your address. AI-powered aerial measurements, a real Good/Better/Best price range, and a free inspection. Powered by New Standard Restoration." />
+  <meta name="description" content="Get an instant roof replacement estimate. AI-powered aerial measurements, a real Good/Better/Best price range, and a free inspection. Powered by New Standard Restoration." />
   <style>
     :root {
       --bg: #0f1720; --panel: #16212e; --panel-2: #1b2937; --line: #233140;
@@ -25,26 +25,32 @@
     h1 .grad { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
     .lede { font-size: clamp(16px, 2.4vw, 19px); color: var(--muted); max-width: 640px; }
 
-    .tool { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin: 28px 0 8px; }
-    form { display: flex; gap: 10px; flex-wrap: wrap; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin: 28px 0 8px; }
+    label { display: block; font-size: 12.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 0 0 6px; }
+    .field { margin-bottom: 14px; }
     input[type="text"], input[type="email"], input[type="tel"] {
-      flex: 1 1 340px; min-width: 0; padding: 14px 16px; font-size: 16px; color: var(--ink);
+      width: 100%; padding: 14px 16px; font-size: 16px; color: var(--ink);
       background: #0b121a; border: 1px solid var(--line); border-radius: 11px; outline: none;
     }
     input:focus { border-color: var(--accent-2); }
+    input.bad { border-color: var(--bad); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     button {
-      padding: 14px 22px; font-size: 16px; font-weight: 700; color: #0b121a; cursor: pointer;
-      background: linear-gradient(90deg, var(--accent), #ff9a63); border: 0; border-radius: 11px; white-space: nowrap;
+      padding: 15px 22px; font-size: 16px; font-weight: 700; color: #0b121a; cursor: pointer; width: 100%;
+      background: linear-gradient(90deg, var(--accent), #ff9a63); border: 0; border-radius: 11px;
     }
     button:disabled { opacity: .6; cursor: default; }
-    button.ghost { background: transparent; color: var(--accent-2); border: 1px solid var(--line); }
     .examples { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .examples span { font-size: 13px; color: var(--muted); }
+    .examples span.lbl { font-size: 13px; color: var(--muted); }
     .chip { font-size: 13px; color: var(--accent-2); background: rgba(76,194,255,.08); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; cursor: pointer; }
     .chip:hover { background: rgba(76,194,255,.16); }
 
+    .step-note { font-size: 13.5px; color: var(--muted); margin: 2px 0 16px; }
+    .step-note b { color: var(--ink); }
     .trust { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; color: var(--muted); font-size: 14px; }
     .trust b { color: var(--ink); }
+    .err { color: var(--bad); font-size: 14px; margin-top: 10px; }
+    .privacy { color: var(--muted); font-size: 12.5px; margin-top: 12px; }
 
     #status { margin: 18px 0; color: var(--muted); display: none; }
     #status.show { display: flex; align-items: center; gap: 12px; }
@@ -53,7 +59,6 @@
 
     #result { display: none; margin: 8px 0 40px; }
     #result.show { display: block; }
-
     .headline-range { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 26px; margin-bottom: 8px; }
     .headline-range .label { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
     .headline-range .big { font-size: clamp(30px, 6vw, 46px); font-weight: 800; letter-spacing: -1px; margin-top: 4px; }
@@ -66,7 +71,6 @@
     .conf-low { background: rgba(248,113,113,.16); color: var(--bad); }
     .conf-meta { font-size: 14px; color: var(--muted); }
     .conf-meta b { color: var(--ink); }
-
     .notes { margin: 6px 0 0; font-size: 13.5px; }
     .notes li { margin: 3px 0; }
     .notes .reason::marker { color: var(--ok); }
@@ -81,26 +85,17 @@
     .tier .blurb { color: var(--muted); font-size: 13.5px; min-height: 38px; }
     .tier .price { font-size: 26px; font-weight: 800; letter-spacing: -.5px; margin: 12px 0 2px; }
     .tier .persq { color: var(--muted); font-size: 12.5px; }
-    .tier ul { list-style: none; padding: 0; margin: 14px 0 0; font-size: 13.5px; color: var(--ink); }
+    .tier ul { list-style: none; padding: 0; margin: 14px 0 0; font-size: 13.5px; }
     .tier ul li { padding: 5px 0 5px 22px; position: relative; color: var(--muted); }
     .tier ul li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-weight: 800; }
 
-    .cta { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 24px; margin-top: 22px; }
-    .cta h2 { margin: 0 0 6px; font-size: 22px; }
-    .cta p { color: var(--muted); margin: 0 0 16px; }
-    .leadform { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .leadform input { flex: none; width: 100%; }
-    .leadform .full { grid-column: 1 / -1; }
-    .leadrow { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
-    .lead-ok { background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.3); color: var(--ink); border-radius: 14px; padding: 20px; margin-top: 16px; display: none; }
-    .lead-ok.show { display: block; }
-    .lead-ok a { color: var(--accent-2); }
-    .err { color: var(--bad); font-size: 14px; margin-top: 8px; }
-
+    .cta { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-top: 22px; }
+    .cta h2 { margin: 0 0 6px; font-size: 20px; }
+    .cta p { color: var(--muted); margin: 0; }
     .disclaimer { color: var(--muted); font-size: 12.5px; margin-top: 18px; }
     footer { border-top: 1px solid var(--line); margin-top: 40px; padding: 26px 0 60px; color: var(--muted); font-size: 14px; }
     footer b { color: var(--ink); }
-    @media (max-width: 520px) { .leadform { grid-template-columns: 1fr; } }
+    @media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -108,63 +103,78 @@
     <header>
       <div class="brand"><span class="dot"></span> RoofNow</div>
       <h1>What's Your Roof Replacement <span class="grad">Likely to Cost?</span></h1>
-      <p class="lede">Enter your address. We measure your roof from aerial imagery and give you an
-        instant, honest price range — no salesperson, no waiting.</p>
+      <p class="lede">Tell us where to send your estimate and we'll measure your roof from
+        aerial imagery — then show you an instant, honest Good / Better / Best price range.</p>
     </header>
 
-    <div class="tool">
-      <form id="quoteForm">
-        <input id="address" type="text" placeholder="Enter your property address" autocomplete="street-address" />
-        <button id="goBtn" type="submit">Get My Estimate</button>
+    <!-- Single gated intake form: the quote is revealed only after submit. -->
+    <div class="card" id="intakeCard">
+      <p class="step-note">Enter your details to unlock your <b>instant roof estimate</b>. A
+        free, no-obligation inspection from New Standard Restoration confirms the final price.</p>
+      <form id="intakeForm" novalidate>
+        <div class="grid2">
+          <div class="field">
+            <label for="firstName">First name</label>
+            <input id="firstName" type="text" autocomplete="given-name" />
+          </div>
+          <div class="field">
+            <label for="lastName">Last name</label>
+            <input id="lastName" type="text" autocomplete="family-name" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="address">Property address</label>
+          <input id="address" type="text" autocomplete="street-address" placeholder="123 Main St, City, ST" />
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="phone">Phone</label>
+            <input id="phone" type="tel" autocomplete="tel" placeholder="(555) 123-4567" />
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" type="email" autocomplete="email" placeholder="you@email.com" />
+          </div>
+        </div>
+        <button id="goBtn" type="submit">Show My Instant Estimate</button>
       </form>
       <div class="examples">
-        <span>Try:</span>
+        <span class="lbl">Try an address:</span>
         <span class="chip" data-addr="1600 Amphitheatre Parkway, Mountain View, CA">Mountain View, CA</span>
         <span class="chip" data-addr="350 5th Ave, New York, NY">New York, NY</span>
       </div>
+      <div class="err" id="formErr"></div>
       <div class="trust">
         <div>✓ <b>AI aerial measurement</b></div>
         <div>✓ <b>Real Good / Better / Best pricing</b></div>
         <div>✓ <b>Free on-site inspection</b></div>
       </div>
+      <p class="privacy">We use your details only to prepare your estimate and schedule your
+        inspection. No spam.</p>
     </div>
 
-    <div id="status"><div class="spinner"></div><div id="statusText">Analyzing your roof…</div></div>
+    <div id="status"><div class="spinner"></div><div id="statusText">Measuring your roof…</div></div>
 
     <div id="result">
       <div class="headline-range">
-        <div class="label">Estimated roof replacement</div>
+        <div class="label">Your estimated roof replacement</div>
         <div class="big" id="rangeBig">—</div>
         <div class="addr" id="rangeAddr"></div>
       </div>
 
       <div class="confidence">
         <span class="conf-badge" id="confBadge">—</span>
-        <div class="conf-meta">
-          <b id="confPct">—</b> confidence ·
-          price accuracy <b id="confMargin">—</b>
-        </div>
+        <div class="conf-meta"><b id="confPct">—</b> confidence · price accuracy <b id="confMargin">—</b></div>
       </div>
       <ul class="notes" id="confNotes"></ul>
 
-      <div class="section-title">Choose your package</div>
+      <div class="section-title">Your package options</div>
       <div class="tiers" id="tiers"></div>
 
       <div class="cta">
-        <h2>Lock in your exact price</h2>
-        <p>Tell us where to send your detailed quote. New Standard Restoration will confirm it
-          with a free, no-obligation inspection.</p>
-        <form class="leadform" id="leadForm">
-          <input id="leadName" type="text" placeholder="Full name" autocomplete="name" />
-          <input id="leadPhone" type="tel" placeholder="Phone" autocomplete="tel" />
-          <input id="leadEmail" class="full" type="email" placeholder="Email" autocomplete="email" />
-        </form>
-        <div class="leadrow">
-          <button id="leadBtn" type="button">Book My Free Inspection</button>
-          <span class="conf-meta">It only takes a few seconds.</span>
-        </div>
-        <div class="err" id="leadErr"></div>
-        <div class="lead-ok" id="leadOk"></div>
+        <h2 id="ctaMsg">You're all set.</h2>
+        <p>New Standard Restoration will reach out to schedule your free inspection and confirm
+          your exact price.</p>
       </div>
 
       <p class="disclaimer" id="disclaimer"></p>
@@ -177,45 +187,77 @@
   </div>
 
   <script>
-    // Set this to your New Standard Restoration scheduling link (e.g. Calendly).
-    const BOOKING_URL = "https://calendly.com/newstandardrestoration";
-
     const $ = (id) => document.getElementById(id);
-    let lastQuote = null;
-    let selectedTier = "better";
-
     const fmtPct = (n) => (n == null ? "—" : n + "%");
+    const show = (el) => el.classList.add("show");
+    const hide = (el) => el.classList.remove("show");
 
-    function show(el) { el.classList.add("show"); }
-    function hide(el) { el.classList.remove("show"); }
+    function clearBad() {
+      ["firstName", "lastName", "address", "phone", "email"].forEach((id) => $(id).classList.remove("bad"));
+    }
 
-    async function getQuote(address) {
+    function validateLocally() {
+      clearBad();
+      const errs = [];
+      const v = (id) => $(id).value.trim();
+      if (!v("firstName")) { errs.push("First name"); $("firstName").classList.add("bad"); }
+      if (!v("lastName")) { errs.push("Last name"); $("lastName").classList.add("bad"); }
+      if (!v("address")) { errs.push("Address"); $("address").classList.add("bad"); }
+      if (v("phone").replace(/\D/g, "").length < 10) { errs.push("Phone"); $("phone").classList.add("bad"); }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v("email"))) { errs.push("Email"); $("email").classList.add("bad"); }
+      return errs;
+    }
+
+    async function submitIntake() {
+      const local = validateLocally();
+      if (local.length) {
+        $("formErr").textContent = "Please complete: " + local.join(", ") + ".";
+        return;
+      }
+      $("formErr").textContent = "";
+      $("goBtn").disabled = true;
       hide($("result"));
       show($("status"));
-      $("statusText").textContent = "Analyzing your roof…";
-      $("goBtn").disabled = true;
+      $("statusText").textContent = "Measuring your roof and preparing your estimate…";
+
+      const body = {
+        first_name: $("firstName").value.trim(),
+        last_name: $("lastName").value.trim(),
+        address: $("address").value.trim(),
+        phone: $("phone").value.trim(),
+        email: $("email").value.trim(),
+      };
+
       try {
-        const r = await fetch("/api/instant_quote?address=" + encodeURIComponent(address));
+        const r = await fetch("/api/lead", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await r.json().catch(() => ({}));
         if (!r.ok) {
-          const e = await r.json().catch(() => ({}));
-          throw new Error(e.error || ("Request failed (" + r.status + ")"));
+          $("formErr").textContent = (data.errors || [data.error || "Please check your details."]).join(" ");
+          return;
         }
-        const q = await r.json();
-        lastQuote = q;
-        renderQuote(q);
+        if (data.quote) {
+          renderQuote(data.quote);
+          if (data.message) $("ctaMsg").textContent = "Thanks, " + body.first_name + "!";
+          hide($("status"));
+          show($("result"));
+          $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+        } else {
+          $("statusText").textContent =
+            "Thanks! We couldn't auto-measure that roof, but New Standard Restoration will follow up with your estimate.";
+        }
       } catch (err) {
-        $("statusText").textContent = "Sorry — we couldn't estimate that address. " + err.message;
-        return;
+        $("statusText").textContent = "Something went wrong. Please try again.";
       } finally {
         $("goBtn").disabled = false;
       }
-      hide($("status"));
-      show($("result"));
-      $("result").scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     function renderQuote(q) {
-      $("rangeBig").textContent = (q.price_range && q.price_range.display) || "Estimate unavailable";
+      $("rangeBig").textContent = (q.price_range && q.price_range.display) || "Estimate pending inspection";
       $("rangeAddr").textContent = q.address || "";
 
       const c = q.confidence || {};
@@ -227,20 +269,13 @@
 
       const notes = $("confNotes");
       notes.innerHTML = "";
-      (c.reasons || []).forEach((t) => {
-        const li = document.createElement("li");
-        li.className = "reason"; li.textContent = t; notes.appendChild(li);
-      });
-      (c.warnings || []).forEach((t) => {
-        const li = document.createElement("li");
-        li.className = "warn"; li.textContent = "⚠ " + t; notes.appendChild(li);
-      });
+      (c.reasons || []).forEach((t) => { const li = document.createElement("li"); li.className = "reason"; li.textContent = t; notes.appendChild(li); });
+      (c.warnings || []).forEach((t) => { const li = document.createElement("li"); li.className = "warn"; li.textContent = "⚠ " + t; notes.appendChild(li); });
 
       const tiers = $("tiers");
       tiers.innerHTML = "";
       (q.estimates || []).forEach((t) => {
         const featured = t.key === "better";
-        if (featured) selectedTier = "better";
         const div = document.createElement("div");
         div.className = "tier" + (featured ? " featured" : "");
         div.innerHTML =
@@ -250,61 +285,16 @@
           '<div class="price">' + t.price_display + "</div>" +
           '<div class="persq">' + (t.price_per_square ? "~$" + t.price_per_square.toLocaleString() + " / square installed" : "") + "</div>" +
           "<ul>" + (t.features || []).map((f) => "<li>" + f + "</li>").join("") + "</ul>";
-        div.addEventListener("click", () => { selectedTier = t.key; });
         tiers.appendChild(div);
       });
 
       $("disclaimer").textContent = q.disclaimer || "";
-      hide($("leadOk")); $("leadErr").textContent = "";
     }
 
-    async function submitLead() {
-      $("leadErr").textContent = "";
-      const body = {
-        name: $("leadName").value,
-        email: $("leadEmail").value,
-        phone: $("leadPhone").value,
-        address: (lastQuote && lastQuote.address) || $("address").value,
-        tier: selectedTier,
-        estimate_low: lastQuote && lastQuote.price_range && lastQuote.price_range.low,
-        estimate_high: lastQuote && lastQuote.price_range && lastQuote.price_range.high,
-      };
-      $("leadBtn").disabled = true;
-      try {
-        const r = await fetch("/api/lead", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          $("leadErr").textContent = (data.errors || [data.error || "Please check your details."]).join(" ");
-          return;
-        }
-        const ok = $("leadOk");
-        ok.innerHTML = (data.message || "Thanks! We'll be in touch.") +
-          '<div style="margin-top:10px"><a href="' + BOOKING_URL +
-          '" target="_blank" rel="noopener">Pick a time for your inspection →</a></div>';
-        show(ok);
-      } catch (err) {
-        $("leadErr").textContent = "Something went wrong. Please try again.";
-      } finally {
-        $("leadBtn").disabled = false;
-      }
-    }
-
-    $("quoteForm").addEventListener("submit", (e) => {
-      e.preventDefault();
-      const a = $("address").value.trim();
-      if (a) getQuote(a);
-    });
+    $("intakeForm").addEventListener("submit", (e) => { e.preventDefault(); submitIntake(); });
     document.querySelectorAll(".chip").forEach((c) =>
-      c.addEventListener("click", () => {
-        $("address").value = c.dataset.addr;
-        getQuote(c.dataset.addr);
-      })
+      c.addEventListener("click", () => { $("address").value = c.dataset.addr; $("address").classList.remove("bad"); })
     );
-    $("leadBtn").addEventListener("click", submitLead);
   </script>
 </body>
 </html>

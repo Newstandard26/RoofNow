@@ -1,17 +1,17 @@
 """Vercel Python serverless function: POST /api/lead.
 
-RoofNow lead capture. Accepts a JSON body from the instant-quote flow,
-validates it (:func:`roofwall.quote.lead.validate_lead`), and records the lead.
+RoofNow's gated intake + instant quote. The intake form is required to see a
+quote, so this single endpoint:
 
-Storage in Phase 1 is pluggable and best-effort:
-  * always logged to stdout (shows up in Vercel function logs)
-  * forwarded to ``LEAD_WEBHOOK_URL`` (e.g. a CRM / Zapier / Slack hook) if set
+  1. validates the lead (first name, last name, address, phone, email)
+  2. measures the roof + builds the instant quote (reuses the measurement engine)
+  3. funnels the lead to the sales channels (email / Slack / Zapier webhook)
+  4. returns the quote to the browser
 
-A failed forward never fails the request — we don't want to lose the homeowner
-because a downstream hook is down. Wire a database here when one exists.
+The lead is funneled even if measurement fails, so a noisy address never costs
+a lead. Funneling is best-effort and never blocks the response.
 
-Body (JSON): { name, email?, phone?, address, tier?, estimate_low?, estimate_high? }
-Requires name + address + (email or phone).
+Body (JSON): { first_name, last_name, address, phone, email, tier? }
 """
 
 import json
@@ -22,6 +22,9 @@ from http.server import BaseHTTPRequestHandler
 # Make the repo-root `roofwall` package importable from /api.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir))
 
+from roofwall.app import measure_address  # noqa: E402
+from roofwall.quote import build_quote  # noqa: E402
+from roofwall.quote.funnel import funnel_lead  # noqa: E402
 from roofwall.quote.lead import validate_lead  # noqa: E402
 from roofwall.ratelimit import FixedWindowRateLimiter  # noqa: E402
 
@@ -36,17 +39,14 @@ def _client_ip(headers) -> str:
     return headers.get("x-real-ip", "") or "unknown"
 
 
-def _forward(lead: dict) -> None:
-    """Best-effort POST to a configured CRM/webhook. Never raises."""
-    url = os.environ.get("LEAD_WEBHOOK_URL")
-    if not url:
-        return
+def _quote_for(address):
+    """Measure + quote for an address. Never raises -> returns None on failure."""
     try:
-        import requests
-
-        requests.post(url, json=lead, timeout=5)
+        report = measure_address(address=address)
+        return build_quote(report)
     except Exception as exc:  # noqa: BLE001
-        print(f"[lead] webhook forward failed: {exc}", file=sys.stderr)
+        print(f"[lead] quote failed for {address!r}: {exc}", file=sys.stderr)
+        return None
 
 
 class handler(BaseHTTPRequestHandler):
@@ -94,12 +94,20 @@ class handler(BaseHTTPRequestHandler):
             self._send(400, {"error": "Validation failed.", "errors": errors})
             return
 
-        # Record: stdout log (always) + optional webhook forward.
+        # Build the quote (so the funnel notification carries the estimate), then
+        # funnel the lead, then return the quote to the browser.
+        quote = _quote_for(lead["address"])
+        if quote and not lead.get("estimate_low"):
+            pr = quote.get("price_range") or {}
+            lead["estimate_low"] = pr.get("low")
+            lead["estimate_high"] = pr.get("high")
+
         print(f"[lead] {json.dumps(lead)}")
-        _forward(lead)
+        funnel_lead(lead, quote)
 
         self._send(200, {
             "ok": True,
             "message": "Thanks! New Standard Restoration will reach out to "
                        "schedule your free inspection.",
+            "quote": quote,
         })
