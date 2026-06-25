@@ -18,10 +18,9 @@ The serverless function can't use interactive integrations, so it POSTs a flat,
 CRM-ready JSON payload to a **Zapier Catch Hook**. Zapier holds the AccuLynx and
 LeadConnector auth and fans the lead out.
 
-Validated live (2026-06-25): **AccuLynx Create Lead** ✅ and **LeadConnector
-Add/Update Contact** ✅ both accept the mapping below. **Gmail Send Email** is
-**restricted by your Zapier account admin** (`halted`) — use the built-in SMTP
-email sink, or have an admin unrestrict the Gmail action in Zapier.
+Validated live (2026-06-25): **AccuLynx Create Lead** ✅, **LeadConnector
+Add/Update Contact** ✅, and **Gmail Send Email** ✅ all accept the mapping
+below. (One Catch Hook can fan out to all three.)
 
 ## One-time setup (~3 minutes)
 
@@ -102,12 +101,25 @@ you prefer split fields, add a Formatter step — not required to start.)
 | Tags                | `RoofNow, Website` (static) |
 | Notes               | `notes`               |
 
+## Action step C — Gmail: Send Email (team notification)
+
+Compose subject/body from the incoming fields (Zapier's "insert field" picker):
+
+| Gmail field | value |
+|-------------|-------|
+| To          | `mattk@newstandardrestoration.com` (static) |
+| From Name   | `RoofNow Leads` (static) |
+| Reply To    | `email` (the homeowner — reply goes straight to them) |
+| Subject     | `New RoofNow lead: {{name}} — {{address}}` |
+| Body type   | `Plain` (static) |
+| Body        | `New RoofNow lead.`<br>`Name: {{name}}`<br>`Phone: {{phone}}`<br>`Email: {{email}}`<br>`Address: {{address}}`<br>`Tier: {{tier}}`<br>`Estimate: {{estimate_amount}}`<br>`Confidence: {{confidence_band}} ({{confidence_pct}}%)` |
+
 ## Optional non-Zapier sinks (set in Vercel env)
 
 - **Slack**: `SLACK_WEBHOOK_URL` (Incoming Webhook) — instant channel post.
-- **Email**: `SMTP_HOST/PORT/USER/PASS`, `LEAD_NOTIFY_TO`
-  (default `mattk@newstandardrestoration.com`). Use this instead of Zapier Gmail,
-  which is admin-restricted on your account.
+- **Email (alternative to Gmail step C)**: `SMTP_HOST/PORT/USER/PASS`,
+  `LEAD_NOTIFY_TO` (default `mattk@newstandardrestoration.com`). Use this only if
+  you'd rather not route email through Zapier; otherwise step C covers it.
 
 All sinks are independent and best-effort: an unconfigured or failing sink is
 skipped and never blocks the homeowner's quote or the other sinks.

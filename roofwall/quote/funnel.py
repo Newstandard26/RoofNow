@@ -6,7 +6,8 @@ best-effort (a failure NEVER blocks the lead or the homeowner's quote):
 
     1. Email     -> SMTP   (SMTP_HOST/PORT/USER/PASS, LEAD_NOTIFY_TO/FROM)
     2. Slack     -> Slack Incoming Webhook   (SLACK_WEBHOOK_URL)
-    3. Zapier/CRM-> Zapier Catch Hook (LEAD_WEBHOOK_URL) -> AccuLynx + LeadConnector
+    3. Zapier/CRM-> Zapier Catch Hook (LEAD_WEBHOOK_URL) -> AccuLynx +
+                    LeadConnector (+ Gmail team email)
 
 The Zapier webhook payload is a flat, CRM-ready record (see
 ``lead_to_webhook_payload``) whose keys line up 1:1 with the AccuLynx "Create
