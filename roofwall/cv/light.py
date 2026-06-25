@@ -1044,18 +1044,20 @@ def _pearl_labels(dsm, region, transform, Xg, Yg, planes, *,
     i.e. a data term (height residual to the plane) plus a Potts spatial-
     smoothness term that forces compact, contiguous facets with clean borders.
     Planes are refit to their pixels between passes (the EM step of PEARL).
-    Returns (full-grid labels, refined planes). Falls back to greedy if
-    PyMaxflow is unavailable.
+    Returns ``(full-grid labels, refined planes, labeler)`` where ``labeler`` is
+    ``"pearl"`` when the graph-cut ran or ``"greedy_fallback"`` when PyMaxflow is
+    unavailable (or the region is empty) and we degrade to nearest-plane greedy
+    labelling — surfaced in debug so a misconfigured deploy is diagnosable.
     """
     full = np.full(dsm.shape, -1, dtype=int)
     ys, xs = np.nonzero(region)
     if len(ys) == 0:
-        return full, planes
+        return full, planes, "greedy_fallback"
     try:
         import maxflow.fastmin as _fm
     except Exception:  # noqa: BLE001 - degrade gracefully if the dep is missing
         labels = assign_pixels(dsm, region.astype("uint8"), planes, transform, 1e9)
-        return labels, planes
+        return labels, planes, "greedy_fallback"
 
     r0, r1 = int(ys.min()), int(ys.max()) + 1
     c0, c1 = int(xs.min()), int(xs.max()) + 1
@@ -1081,7 +1083,7 @@ def _pearl_labels(dsm, region, transform, Xg, Yg, planes, *,
             break
         P = refit
     full[r0:r1, c0:c1] = lab
-    return full, [tuple(p) for p in P]
+    return full, [tuple(p) for p in P], "pearl"
 
 
 def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft=1.8,
@@ -1156,8 +1158,8 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     # for the roof plan. Decoupled from measurement so the validated line lengths
     # don't change. _coherent_facets turns that partition into clean, gap-free,
     # footprint-tiling facet polygons (sever tendrils, dissolve strips, weld).
-    dlabels, dplanes = _pearl_labels(dsm, component, transform, Xg, Yg, planes,
-                                     lam=pearl_lambda, iters=4)
+    dlabels, dplanes, diagram_labeler = _pearl_labels(
+        dsm, component, transform, Xg, Yg, planes, lam=pearl_lambda, iters=4)
     dlabels = _smooth_labels(dlabels, len(dplanes), 1)
     dlabels = np.where(component, dlabels, -1)
     clean = _clean_tiled_labels(dlabels, dplanes, component, dsm, Xg, Yg, transform,
@@ -1193,13 +1195,14 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         clean=clean, facets=snapped, lines=lines, mask_sqft=mask_sqft,
         roof_area=roof_area, covered=covered, max_residual=max_residual,
         n_priors_in=n_priors_in, n_merged_priors=n_merged_priors,
-        used_fallback=used_fallback, Xg=Xg, Yg=Yg, seg_diag=seg_diag)
+        used_fallback=used_fallback, diagram_labeler=diagram_labeler,
+        Xg=Xg, Yg=Yg, seg_diag=seg_diag)
     return snapped, lines, debug
 
 
 def _recovery_debug(*, dsm, mask, transform, planes, component, clean, facets, lines,
                     mask_sqft, roof_area, covered, max_residual, n_priors_in,
-                    n_merged_priors, used_fallback, Xg, Yg, seg_diag):
+                    n_merged_priors, used_fallback, diagram_labeler, Xg, Yg, seg_diag):
     """Assemble the recovery debug payload + confidence warnings and a QA flag.
 
     We never fabricate geometry: when the DSM is poorly explained by the recovered
@@ -1286,6 +1289,7 @@ def _recovery_debug(*, dsm, mask, transform, planes, component, clean, facets, l
         "edge_counts": edge_counts,
         "n_edges": n_edges,
         "used_fallback": used_fallback,
+        "diagram_labeler": diagram_labeler,
         "planes_abc": [[round(p[0], 3), round(p[1], 3), round(p[2], 1)] for p in planes],
         "segs": seg_diag,
     }

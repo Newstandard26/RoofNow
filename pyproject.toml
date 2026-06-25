@@ -13,13 +13,18 @@ authors = [{ name = "New Standard Restoration" }]
 dependencies = [
     # The measurement engine is pure-stdlib. `requests` powers live Solar/Geocode
     # lookups. numpy + tifffile + contourpy are the lightweight DSM-recovery stack
-    # (api/recover.py): they MUST be base deps, not optional extras — Vercel's
-    # Python builder installs only [project].dependencies (via uv) into the
-    # serverless functions and ignores requirements.txt. ~74 MB, fits the limit.
+    # (api/recover.py); shapely (+GEOS) builds the regularized facet arrangement
+    # and PyMaxflow runs the PEARL graph-cut labelling. They MUST be base deps,
+    # not optional extras — Vercel's Python builder installs only
+    # [project].dependencies (via uv) into the serverless functions and ignores
+    # requirements.txt, so anything listed only there silently degrades in prod
+    # (PEARL -> greedy fallback, regularized facets -> raster). ~90 MB, fits 250.
     "requests>=2.31",
     "numpy>=1.26",
     "tifffile>=2024.1.30",
     "contourpy>=1.2",
+    "shapely>=2.0",
+    "PyMaxflow>=1.3.0",
 ]
 
 [project.optional-dependencies]
@@ -32,15 +37,16 @@ lidar-io = ["pdal>=3.4", "open3d>=0.18"]
 # Phase 2.5 — Solar DSM boundary recovery (recover.py + geo.py): raster -> polygons.
 cv = ["numpy>=1.26", "scikit-image>=0.22", "shapely>=2.0", "rasterio>=1.3", "pyproj>=3.6"]
 # Phase 2.5 (light) — Vercel-deployable DSM recovery (light.py): the same raster
-# -> polygons step on a ~74 MB stack (no GDAL/scikit-image) so it fits a function.
-cv-light = ["numpy>=1.26", "tifffile>=2024.1.30", "contourpy>=1.2"]
+# -> polygons step on a ~90 MB stack (no GDAL/scikit-image) so it fits a function.
+# shapely builds the regularized facet arrangement; PyMaxflow runs PEARL graph-cut.
+cv-light = ["numpy>=1.26", "tifffile>=2024.1.30", "contourpy>=1.2", "shapely>=2.0", "PyMaxflow>=1.3.0"]
 # Phase 2 — oblique-photo opening rectification. numpy does the homography;
 # opencv is only needed to warp the actual image pixels.
 walls = ["numpy>=1.26"]
 walls-io = ["opencv-python>=4.9"]
 # Phase 1 — API layer
 api = ["fastapi>=0.110", "uvicorn>=0.29"]
-dev = ["pytest>=8.0", "numpy>=1.26", "scikit-image>=0.22", "shapely>=2.0", "rasterio>=1.3", "pyproj>=3.6", "tifffile>=2024.1.30", "contourpy>=1.2"]
+dev = ["pytest>=8.0", "numpy>=1.26", "scikit-image>=0.22", "shapely>=2.0", "rasterio>=1.3", "pyproj>=3.6", "tifffile>=2024.1.30", "contourpy>=1.2", "PyMaxflow>=1.3.0"]
 
 [project.scripts]
 roofwall = "roofwall.cli:main"

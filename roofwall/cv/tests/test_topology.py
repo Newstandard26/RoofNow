@@ -157,3 +157,42 @@ def test_low_confidence_flags_qa():
     d = m.debug
     assert d["qa"] in ("review", "low_confidence")
     assert d["warnings"]                 # at least one warning surfaced
+
+
+# ---------------------------------------------------------------- PEARL labeler
+def test_pearl_used_when_maxflow_installed():
+    # With PyMaxflow available the diagram partition must use the graph-cut
+    # (PEARL), not the greedy fallback.
+    pytest.importorskip("maxflow")
+    m = _model(hip_roof(40, 24, 6))
+    assert m.debug["diagram_labeler"] == "pearl"
+
+
+def test_pearl_falls_back_gracefully_without_maxflow(monkeypatch):
+    # Simulate a deploy where PyMaxflow failed to install: _pearl_labels imports
+    # maxflow.fastmin lazily, so blocking the import in sys.modules forces the
+    # greedy fallback. Recovery must still succeed and report the fallback.
+    monkeypatch.setitem(sys.modules, "maxflow", None)
+    monkeypatch.setitem(sys.modules, "maxflow.fastmin", None)
+    m = _model(hip_roof(40, 24, 6))
+    assert m.debug["diagram_labeler"] == "greedy_fallback"
+    assert len(m.facets) >= 1            # greedy labels still yield a usable roof
+
+
+def test_pearl_labels_returns_labeler_tag():
+    # Unit-level: _pearl_labels reports which labeler ran for both paths.
+    import numpy as np
+    from roofwall.cv.light import _pearl_labels
+    from roofwall.cv.recover import RasterTransform, plane_from_solar_segment
+
+    t = RasterTransform(x0=0.0, y0=0.0, res=1.0, nrows=20)
+    Xg, Yg = t.grids(20)
+    dsm = np.zeros((20, 20))
+    region = np.zeros((20, 20), dtype=bool)
+    region[5:15, 5:15] = True
+    planes = [plane_from_solar_segment(20, 180, (10, 10, 0))]
+
+    _, _, tag = _pearl_labels(dsm, region, t, Xg, Yg, planes, iters=1)
+    assert tag in ("pearl", "greedy_fallback")
+    if "maxflow" in sys.modules and sys.modules["maxflow"] is not None:
+        assert tag == "pearl"
