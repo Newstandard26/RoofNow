@@ -1611,6 +1611,30 @@ crypto = [
 ]
 
 [[package]]
+name = "pymaxflow"
+version = "1.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f4/d8/a719512ee03084541fc8e6f1fa06be366fb97f9c39f0b3b3bba7364769e8/pymaxflow-1.3.2.tar.gz", hash = "sha256:19f1668dd718d1451a1ad18902ac674b1b380cda1150c855b5e817f1b0de3095", size = 1342765, upload-time = "2024-11-25T11:08:36.105Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/73/d6/e15724819b9c7c771db652c80a8d8aeb2848e747b161bc96a81de4d4e8d6/PyMaxflow-1.3.2-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:72416c85b540d8619e437081c311267cb6f642f11c1d39c54330b4efc0165f2b", size = 129442, upload-time = "2024-11-25T11:12:32.268Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/6e/31b1b57bb020b3b0481f23a5ed196cdc432227600a96a5e6b5d73280349b/PyMaxflow-1.3.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:6d6836a8a2adcc92e1a31effffce3389d6649d3f8eb07610e9cfde9d01369c70", size = 123109, upload-time = "2024-11-25T11:09:33.968Z" },
+    { url = "https://files.pythonhosted.org/packages/61/1f/da408c87ec1a8e8533f8c37071d4b69848b4d767b0267a388571f5cc27df/PyMaxflow-1.3.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:df7b5bdc04d6ad685228299f122a930ab9fe47a37f613309de0618c040af00f3", size = 941411, upload-time = "2024-11-25T11:10:38.041Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/6d/1633c2a10b2e368c651396910e235b62026c62657808d5754ddd6233628e/PyMaxflow-1.3.2-cp311-cp311-win_amd64.whl", hash = "sha256:92d95f5d04c6d79e06c464fd9a83e9108131d0577c6de2b320cc3946fa04ad28", size = 105423, upload-time = "2024-11-25T11:13:07.295Z" },
+    { url = "https://files.pythonhosted.org/packages/6d/37/e0ea14f87718f161e12b8f8b3271b6757db3caa03deea2eb85434a1c0143/PyMaxflow-1.3.2-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:5098692e804682a1a4129e52c4a3b6f33b3269af467cf48a1a7fd453728a053d", size = 132941, upload-time = "2024-11-25T11:12:33.797Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/ac/50e6685e98ab7735f3178d2f6df395222a3455eacbd471287fdd8f074897/PyMaxflow-1.3.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:0f9e26ea0cbd8c28771e8244b2de55ac146e77048452054b4dda7fcabd24f557", size = 123463, upload-time = "2024-11-25T11:09:35.54Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/aa/90df81ac75f0a12961c04b339394510e8f526bb251f61f750787b5cbcc90/PyMaxflow-1.3.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5fb2116d3949f2ae8a4897c7e54ffa9892c866b17c48bdf6bd182d730aae6581", size = 939222, upload-time = "2024-11-25T11:10:39.423Z" },
+    { url = "https://files.pythonhosted.org/packages/47/1c/b384d2cd6f9cbbf4a2c80dff70d5cecb74320061d68bc33e5bce18b16dc1/PyMaxflow-1.3.2-cp312-cp312-win_amd64.whl", hash = "sha256:95072906a5df055b656e1aa4e1b010d7b883d9cfb2ca990d915f79663bdd72aa", size = 104954, upload-time = "2024-11-25T11:13:08.776Z" },
+    { url = "https://files.pythonhosted.org/packages/31/5b/fd45da95eae07a22c5adbdc354763b205c8d267a79741b1fa6deef909950/PyMaxflow-1.3.2-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:a0374ba195103374a4d66e87e5cb70cc876c4f963834b95a7d7c0cb28405b465", size = 131637, upload-time = "2024-11-25T11:12:35.326Z" },
+    { url = "https://files.pythonhosted.org/packages/29/1a/151bcdb6e13dc9d5919868f24ac49dcb342c19f53531d4f2736833fd4b10/PyMaxflow-1.3.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:90138b38fb1a5067acec05a4c938fff24d8f1f2dca8c4dd81f763d5f452d8464", size = 122641, upload-time = "2024-11-25T11:09:37.173Z" },
+    { url = "https://files.pythonhosted.org/packages/a2/9f/6bc30bff12281449e38db93313bae71e08c776ecae310bd7f2efd7ef5ad4/PyMaxflow-1.3.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:771f7711a78bc8ef1b698d75c4139d949b7aeb0e11def4e70709d4c74e022b67", size = 937281, upload-time = "2024-11-25T11:10:40.742Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/ed/dd5c1d0ee1f31d78b05a0fc26b2d0f93d0e54d81fed47f02dbcf7e80a8ab/PyMaxflow-1.3.2-cp313-cp313-win_amd64.whl", hash = "sha256:32961f56bd5033a70931f1b98f9ec666c2fa2dfc0843b92d7cc32a81ad2d7dee", size = 104815, upload-time = "2024-11-25T11:13:09.66Z" },
+]
+
+[[package]]
 name = "pyparsing"
 version = "3.3.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1993,7 +2017,9 @@ dependencies = [
     { name = "contourpy" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pymaxflow" },
     { name = "requests" },
+    { name = "shapely" },
     { name = "tifffile", version = "2026.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "tifffile", version = "2026.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
@@ -2016,6 +2042,8 @@ cv-light = [
     { name = "contourpy" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pymaxflow" },
+    { name = "shapely" },
     { name = "tifffile", version = "2026.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "tifffile", version = "2026.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
@@ -2023,6 +2051,7 @@ dev = [
     { name = "contourpy" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pymaxflow" },
     { name = "pyproj" },
     { name = "pytest" },
     { name = "rasterio", version = "1.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -2068,6 +2097,9 @@ requires-dist = [
     { name = "open3d", marker = "extra == 'lidar-io'", specifier = ">=0.18" },
     { name = "opencv-python", marker = "extra == 'walls-io'", specifier = ">=4.9" },
     { name = "pdal", marker = "extra == 'lidar-io'", specifier = ">=3.4" },
+    { name = "pymaxflow", specifier = ">=1.3.0" },
+    { name = "pymaxflow", marker = "extra == 'cv-light'", specifier = ">=1.3.0" },
+    { name = "pymaxflow", marker = "extra == 'dev'", specifier = ">=1.3.0" },
     { name = "pyproj", marker = "extra == 'cv'", specifier = ">=3.6" },
     { name = "pyproj", marker = "extra == 'dev'", specifier = ">=3.6" },
     { name = "pyproj", marker = "extra == 'lidar'", specifier = ">=3.6" },
@@ -2078,7 +2110,9 @@ requires-dist = [
     { name = "requests", specifier = ">=2.31" },
     { name = "scikit-image", marker = "extra == 'cv'", specifier = ">=0.22" },
     { name = "scikit-image", marker = "extra == 'dev'", specifier = ">=0.22" },
+    { name = "shapely", specifier = ">=2.0" },
     { name = "shapely", marker = "extra == 'cv'", specifier = ">=2.0" },
+    { name = "shapely", marker = "extra == 'cv-light'", specifier = ">=2.0" },
     { name = "shapely", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "shapely", marker = "extra == 'lidar'", specifier = ">=2.0" },
     { name = "tifffile", specifier = ">=2024.1.30" },

@@ -103,14 +103,15 @@ def _convex_at(mx, my, i_idx, j_idx, pi, pj, nx, ny, labels, transform):
 
 def _interior_segments(i_idx, j_idx, planes, labels, transform, pts_world, *,
                        gap_ft=2.5, min_len_ft=3.0, max_perp_ft=4.0):
-    """Shared edge(s) of facets i,j -> list of (kind, length_ft).
+    """Shared edge(s) of facets i,j -> list of (kind, length_ft, slope, (p0, p1)).
 
     Projects the shared-border pixels onto the planes' intersection line, then
     splits them into contiguous runs (breaking where there's a gap along the
     line) so multiple separate borders aren't fused into one giant span and the
     length isn't inflated across gaps. Runs that are too short, or too spread
     perpendicular to the line (a 2-D interleave patch, not a clean edge), are
-    dropped.
+    dropped. ``p0``/``p1`` are the run's world-XY endpoints on the line (for the
+    diagram), so the drawn segment matches the measured length.
     """
     pi, pj = planes[i_idx], planes[j_idx]
     ai, bi, _ci = pi
@@ -146,7 +147,11 @@ def _interior_segments(i_idx, j_idx, planes, labels, transform, pts_world, *,
             convex = _convex_at(float(xs[run].mean()), float(ys[run].mean()),
                                 i_idx, j_idx, pi, pj, nx, ny, labels, transform)
             kind = ("ridge" if level else "hip") if convex else "valley"
-            segs.append((kind, length_xy * factor, slope_along))
+            um = float(u[run].mean())
+            t0, t1 = float(t[run.start]), float(t[run.stop - 1])
+            p0 = (t0 * dhx + um * nx, t0 * dhy + um * ny)
+            p1 = (t1 * dhx + um * nx, t1 * dhy + um * ny)
+            segs.append((kind, length_xy * factor, slope_along, (p0, p1)))
     return segs
 
 
@@ -280,11 +285,13 @@ def measure_lines(labels, planes, transform, mask=None, *, dsm=None,
         if len(px_pts) < min_shared_px or i >= len(planes) or j >= len(planes):
             continue
         world = [transform.colrow_to_world(c, r) for c, r in px_pts]
-        for kind, length, slope in _interior_segments(i, j, planes, labels, transform, world):
+        for kind, length, slope, (p0, p1) in _interior_segments(i, j, planes, labels, transform, world):
             acc[kind].append(length)
             if diag is not None:
                 diag.append({"e": "int", "ij": [i, j], "k": kind,
-                             "L": round(length, 1), "s": round(slope, 2)})
+                             "L": round(length, 1), "s": round(slope, 2),
+                             "p0": [round(p0[0], 2), round(p0[1], 2)],
+                             "p1": [round(p1[0], 2), round(p1[1], 2)]})
 
     for p0, p1 in _outline_segments(labels, transform, simplify_ft):
         for q0, q1, fi in _split_outline_segment(p0, p1, labels, transform, planes):
@@ -309,7 +316,9 @@ def measure_lines(labels, planes, transform, mask=None, *, dsm=None,
             acc[kind].append(length_3d)
             if diag is not None:
                 diag.append({"e": "out", "f": fi, "k": kind,
-                             "L": round(length_3d, 1), "s": round(slope_along, 2)})
+                             "L": round(length_3d, 1), "s": round(slope_along, 2),
+                             "p0": [round(q0[0], 2), round(q0[1], 2)],
+                             "p1": [round(q1[0], 2), round(q1[1], 2)]})
 
     out: Dict[str, dict] = {}
     for kind, lens in acc.items():

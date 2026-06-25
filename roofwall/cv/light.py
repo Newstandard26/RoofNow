@@ -342,6 +342,32 @@ def _seeded_component(region: np.ndarray, center_rc) -> np.ndarray:
     return out
 
 
+def _target_component(region: np.ndarray, center_rc, *, res: float,
+                      max_hole_sqft: float = 150.0) -> np.ndarray:
+    """Robust target-building footprint from the raw Solar mask.
+
+    1. keep only the 8-connected component nearest the queried/centre pixel
+       (drops detached neighbouring houses, garages and sheds in the 50 m tile);
+    2. fill interior holes up to ``max_hole_sqft`` (chimneys, vents, AC units,
+       small DSM dropouts) so a facet isn't carved into a donut, while leaving a
+       genuine courtyard open.
+    Tiny disconnected mask islands are inherently excluded by step 1.
+    """
+    comp = _seeded_component(region, center_rc)
+    if not comp.any():
+        return comp
+    filled = _fill_holes(comp)
+    holes = filled & ~comp
+    if not holes.any():
+        return comp
+    res2 = res * res
+    out = comp.copy()
+    for h in _connected_components(holes):
+        if int(h.sum()) * res2 <= max_hole_sqft:
+            out |= h
+    return out
+
+
 # ---------- crease-watershed facet segmentation (pure numpy) ----------
 # A roof facet is a smooth surface bounded by creases (ridge/hip/valley/eave,
 # where the DSM bends). Tracing each plane's label set instead gives scattered,
@@ -884,7 +910,13 @@ def _regularized_facets(clean, dplanes, component, transform, *, simplify_ft,
     if foot.geom_type == "MultiPolygon":
         foot = max(foot.geoms, key=lambda g: g.area)
 
-    # plane-intersection chords for every real facet adjacency, clipped to foot
+    # plane-intersection chords for every real facet adjacency. The chords are
+    # full lines that OVERSHOOT the footprint (not clipped to it): a clipped chord
+    # ends exactly on the boundary and, on a slightly slanted eave, fails to node
+    # there (float error) so polygonize can't split the facet — overshooting makes
+    # every chord cross the boundary cleanly. Faces outside the footprint stay
+    # open (no closing edge) so polygonize never emits them; we still filter by
+    # containment for safety.
     chains, _ = _boundary_chains(clean)
     pairs = set()
     for ch in chains:
@@ -892,7 +924,7 @@ def _regularized_facets(clean, dplanes, component, transform, *, simplify_ft,
         if i >= 0 and j >= 0:
             pairs.add((i, j))
     minx, miny, maxx, maxy = foot.bounds
-    diag = math.hypot(maxx - minx, maxy - miny) * 1.2 + 1.0
+    diag = math.hypot(maxx - minx, maxy - miny) * 1.5 + 2.0
     cx, cy = (minx + maxx) / 2.0, (miny + maxy) / 2.0
     chords = []
     for i, j in pairs:
@@ -906,16 +938,19 @@ def _regularized_facets(clean, dplanes, component, transform, *, simplify_ft,
         t = (A * cx + B * cy + C) / (n * n)
         px, py = cx - A * t, cy - B * t
         dx, dy = -B / n, A / n
-        seg = LineString([(px - dx * diag, py - dy * diag),
-                          (px + dx * diag, py + dy * diag)]).intersection(foot)
-        if seg.is_empty:
-            continue
-        if seg.geom_type == "LineString":
-            chords.append(seg)
-        elif seg.geom_type == "MultiLineString":
-            chords.extend(list(seg.geoms))
+        line = LineString([(px - dx * diag, py - dy * diag),
+                           (px + dx * diag, py + dy * diag)])
+        if line.intersects(foot):
+            chords.append(line)
 
-    faces = list(polygonize(unary_union([foot.boundary] + chords)))
+    # set_precision snaps the noded network to a fine grid so coincident
+    # intersections fuse reliably before polygonize.
+    try:
+        from shapely import set_precision
+        net = set_precision(unary_union([foot.boundary] + chords), 0.01)
+    except Exception:
+        net = unary_union([foot.boundary] + chords)
+    faces = [f for f in polygonize(net) if foot.contains(f.representative_point())]
     if not faces:
         return []
 
@@ -998,6 +1033,121 @@ def _regularized_facets(clean, dplanes, component, transform, *, simplify_ft,
     return facets
 
 
+def _footprint_polygon(component, transform, simplify_ft):
+    """Shapely polygon of the target-building footprint (holes filled) or None."""
+    try:
+        from shapely.geometry import Polygon
+    except Exception:
+        return None
+    fp = _trace_region(_fill_holes(component), (0.0, 0.0, 0.0), transform, simplify_ft)
+    if len(fp) < 3:
+        return None
+    poly = Polygon([(x, y) for x, y, _ in fp]).buffer(0)
+    if poly.is_empty:
+        return None
+    if poly.geom_type == "MultiPolygon":
+        poly = max(poly.geoms, key=lambda g: g.area)
+    return poly
+
+
+def _clean_facet_polygons(facets, footprint, transform, *, min_facet_area_sqft,
+                          sliver_erode_ft=0.75, overlap_tol_sqft=2.0):
+    """Final topology guard for the roof_diagram polygons.
+
+    Whatever path produced the facets (the regularized arrangement, or the raster
+    fallback which deliberately overlaps neighbours by a couple of pixels), this
+    guarantees the returned diagram is presentable:
+
+    * fix / reject self-intersecting ("star"/pinch) polygons,
+    * enforce pairwise non-overlap (each facet is differenced against the union of
+      the already-placed, larger facets — winner-keeps-area), which also snaps the
+      shared boundary to a single coincident edge,
+    * clip every facet to the target building footprint,
+    * split a label that spans disconnected regions into separate facets,
+    * drop sliver triangles (erode by ``sliver_erode_ft`` empties them).
+
+    Each surviving facet is re-lifted to 3D from a plane fit to its own vertices.
+    Returns ``(clean_facets, dbg)``. If shapely is unavailable it is a no-op
+    (facets unchanged, ``qa_required`` False) so the light path still works.
+    """
+    dbg = {"polygons_before_cleanup": len(facets),
+           "polygons_after_cleanup": len(facets),
+           "rejected_polygons": [], "overlap_sqft": 0.0, "qa_required": False}
+    try:
+        from shapely.geometry import Polygon
+    except Exception:
+        return facets, dbg
+
+    items = []
+    for f in facets:
+        verts = f["verts"]
+        if len(verts) < 3:
+            dbg["rejected_polygons"].append({"id": str(f["id"]), "reason": "degenerate"})
+            continue
+        poly = Polygon([(v[0], v[1]) for v in verts])
+        if not poly.is_valid:
+            poly = poly.buffer(0)            # heals self-touching star / pinch
+        if poly.is_empty or poly.geom_type not in ("Polygon", "MultiPolygon"):
+            dbg["rejected_polygons"].append({"id": str(f["id"]),
+                                             "reason": "self_intersecting"})
+            continue
+        zs = np.array([v[2] for v in verts])
+        plane = _fit_plane(np.array([v[0] for v in verts]),
+                           np.array([v[1] for v in verts]), zs) or \
+            (0.0, 0.0, float(zs.mean()))
+        items.append((str(f["id"]), plane, poly))
+    # largest first: reliable big facets keep their area, smaller ones get clipped
+    items.sort(key=lambda t: t[1] and t[2].area, reverse=True)
+
+    accepted = []
+    placed = None
+    for fid, plane, poly in items:
+        p = poly.difference(placed) if placed is not None else poly
+        if footprint is not None and not p.is_empty:
+            p = p.intersection(footprint)
+        if p.is_empty:
+            dbg["rejected_polygons"].append({"id": fid, "reason": "fully_overlapped_or_outside"})
+            continue
+        pieces = list(p.geoms) if p.geom_type == "MultiPolygon" else [p]
+        n_pieces = sum(1 for g in pieces if g.geom_type == "Polygon")
+        idx = 0
+        for piece in pieces:
+            piece = piece.buffer(0)
+            if piece.is_empty or piece.geom_type != "Polygon":
+                continue
+            if piece.area < min_facet_area_sqft:
+                dbg["rejected_polygons"].append({"id": fid, "reason": "below_min_area"})
+                continue
+            if piece.buffer(-sliver_erode_ft).is_empty:
+                dbg["rejected_polygons"].append({"id": fid, "reason": "sliver"})
+                continue
+            new_id = fid if n_pieces == 1 else f"{fid}#{idx}"
+            idx += 1
+            accepted.append((new_id, plane, piece))
+            placed = piece if placed is None else placed.union(piece)
+
+    # residual overlap (should be ~0 by construction) -> QA gate
+    overlap = 0.0
+    for i in range(len(accepted)):
+        for j in range(i + 1, len(accepted)):
+            inter = accepted[i][2].intersection(accepted[j][2])
+            if inter.geom_type in ("Polygon", "MultiPolygon") and not inter.is_empty:
+                overlap += inter.area
+    dbg["overlap_sqft"] = round(overlap, 2)
+    dbg["qa_required"] = overlap > overlap_tol_sqft
+
+    clean = []
+    for fid, plane, poly in accepted:
+        poly = poly.simplify(0.5)
+        coords = list(poly.exterior.coords)[:-1]
+        if len(coords) < 3:
+            continue
+        clean.append({"id": fid,
+                      "verts": [(x, y, plane_z(plane, x, y)) for x, y in coords]})
+    dbg["polygons_after_cleanup"] = len(clean)
+    return clean, dbg
+
+
 def _pearl_labels(dsm, region, transform, Xg, Yg, planes, *,
                   lam=1.0, iters=4, rmax=6.0):
     """Coherent plane labelling by graph-cut energy minimization (PEARL).
@@ -1009,18 +1159,20 @@ def _pearl_labels(dsm, region, transform, Xg, Yg, planes, *,
     i.e. a data term (height residual to the plane) plus a Potts spatial-
     smoothness term that forces compact, contiguous facets with clean borders.
     Planes are refit to their pixels between passes (the EM step of PEARL).
-    Returns (full-grid labels, refined planes). Falls back to greedy if
-    PyMaxflow is unavailable.
+    Returns ``(full-grid labels, refined planes, labeler)`` where ``labeler`` is
+    ``"pearl"`` when the graph-cut ran or ``"greedy_fallback"`` when PyMaxflow is
+    unavailable (or the region is empty) and we degrade to nearest-plane greedy
+    labelling — surfaced in debug so a misconfigured deploy is diagnosable.
     """
     full = np.full(dsm.shape, -1, dtype=int)
     ys, xs = np.nonzero(region)
     if len(ys) == 0:
-        return full, planes
+        return full, planes, "greedy_fallback"
     try:
         import maxflow.fastmin as _fm
     except Exception:  # noqa: BLE001 - degrade gracefully if the dep is missing
         labels = assign_pixels(dsm, region.astype("uint8"), planes, transform, 1e9)
-        return labels, planes
+        return labels, planes, "greedy_fallback"
 
     r0, r1 = int(ys.min()), int(ys.max()) + 1
     c0, c1 = int(xs.min()), int(xs.max()) + 1
@@ -1046,7 +1198,7 @@ def _pearl_labels(dsm, region, transform, Xg, Yg, planes, *,
             break
         P = refit
     full[r0:r1, c0:c1] = lab
-    return full, [tuple(p) for p in P]
+    return full, [tuple(p) for p in P], "pearl"
 
 
 def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft=1.8,
@@ -1064,7 +1216,9 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     Tracing then simplifies edges, drops speck facets (< min_facet_area_sqft),
     and welds shared edges (snap_tol) to close seams between neighbours.
     """
+    n_priors_in = len(priors)
     priors = _merge_priors(priors)
+    n_merged_priors = len(priors)
     planes = [p["abc"] for p in priors]
     ids = [p["id"] for p in priors]
     nrows, ncols = dsm.shape
@@ -1099,10 +1253,13 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         ids = [ids[i] for i in keep]
 
     # Isolate the queried building (drop neighbouring structures in the 50 m
-    # tile so they don't inflate area or spawn phantom edges).
+    # tile so they don't inflate area or spawn phantom edges). The DSM/mask tile
+    # is anchored on the building centre, so the centre pixel is the queried roof;
+    # _target_component keeps that 8-connected component and fills small holes.
     filled = assign_pixels(dsm, mask, planes, transform, max_residual=1e9)
     mask_sqft = float(int((filled >= 0).sum()) * res2)
-    component = _seeded_component(filled >= 0, (nrows // 2, ncols // 2))
+    component = _target_component(filled >= 0, (nrows // 2, ncols // 2),
+                                  res=transform.res)
 
     # MEASUREMENT labels (line lengths): nearest-plane fill + majority smooth.
     # These are measured edge-by-edge against the plane intersections; the raw
@@ -1116,8 +1273,8 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
     # for the roof plan. Decoupled from measurement so the validated line lengths
     # don't change. _coherent_facets turns that partition into clean, gap-free,
     # footprint-tiling facet polygons (sever tendrils, dissolve strips, weld).
-    dlabels, dplanes = _pearl_labels(dsm, component, transform, Xg, Yg, planes,
-                                     lam=pearl_lambda, iters=4)
+    dlabels, dplanes, diagram_labeler = _pearl_labels(
+        dsm, component, transform, Xg, Yg, planes, lam=pearl_lambda, iters=4)
     dlabels = _smooth_labels(dlabels, len(dplanes), 1)
     dlabels = np.where(component, dlabels, -1)
     clean = _clean_tiled_labels(dlabels, dplanes, component, dsm, Xg, Yg, transform,
@@ -1131,7 +1288,8 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
                                  min_facet_area_sqft=min_facet_area_sqft)
     roof_area = float(int((clean >= 0).sum()) * res2)
     covered = sum(_poly_area_sqft(f["verts"]) for f in facets)
-    if facets and covered >= 0.85 * roof_area:
+    used_fallback = not (facets and covered >= 0.85 * roof_area)
+    if not used_fallback:
         # The arrangement already gives shared, straight edges — no snap needed
         # (snapping would only nudge the exact polygonize vertices apart).
         snapped = facets
@@ -1141,25 +1299,146 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
                                   min_facet_area_px=min_facet_area_px,
                                   min_facet_area_sqft=min_facet_area_sqft)
         snapped = snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
+        covered = sum(_poly_area_sqft(f["verts"]) for f in facets)
+    # Final topology guard: make the roof_diagram polygons simple, non-overlapping,
+    # clipped to the footprint and sliver-free regardless of which path produced
+    # them (the raster fallback overlaps neighbours by design). Does NOT touch the
+    # measurement path below — line_lengths come from `labels`, not these polygons.
+    footprint_poly = _footprint_polygon(component, transform, simplify_ft)
+    snapped, cleanup = _clean_facet_polygons(
+        snapped, footprint_poly, transform, min_facet_area_sqft=min_facet_area_sqft)
     # Line lengths from the plane geometry (accurate even when facets don't
     # weld); imported lazily to avoid a module import cycle.
     from roofwall.cv.lines import measure_lines
     seg_diag: list = []
     lines = measure_lines(labels, planes, transform, mask, dsm=dsm, diag=seg_diag)
-    debug = {
-        "n_planes_kept": len(planes),
-        "n_facets_traced": len(facets),
-        "res_ft": round(transform.res, 3),
+    debug = _recovery_debug(
+        dsm=dsm, mask=mask, transform=transform, planes=planes, component=component,
+        clean=clean, facets=snapped, lines=lines, mask_sqft=mask_sqft,
+        roof_area=roof_area, covered=covered, max_residual=max_residual,
+        n_priors_in=n_priors_in, n_merged_priors=n_merged_priors,
+        used_fallback=used_fallback, diagram_labeler=diagram_labeler,
+        cleanup=cleanup, Xg=Xg, Yg=Yg, seg_diag=seg_diag)
+    return snapped, lines, debug
+
+
+def _label_overlay(clean, component):
+    """Cropped raw diagram-label grid for a debug overlay: {origin, shape, labels}."""
+    ys, xs = np.nonzero(component)
+    if len(ys) == 0:
+        return {"origin": [0, 0], "shape": [0, 0], "labels": []}
+    r0, r1 = int(ys.min()), int(ys.max()) + 1
+    c0, c1 = int(xs.min()), int(xs.max()) + 1
+    crop = clean[r0:r1, c0:c1]
+    return {"origin": [r0, c0], "shape": [int(crop.shape[0]), int(crop.shape[1])],
+            "labels": crop.astype(int).tolist()}
+
+
+def _recovery_debug(*, dsm, mask, transform, planes, component, clean, facets, lines,
+                    mask_sqft, roof_area, covered, max_residual, n_priors_in,
+                    n_merged_priors, used_fallback, diagram_labeler, cleanup, Xg, Yg,
+                    seg_diag):
+    """Assemble the recovery debug payload + confidence warnings and a QA flag.
+
+    We never fabricate geometry: when the DSM is poorly explained by the recovered
+    planes (high residual / unassigned), the facets fragment, or the partition fell
+    back to raster tracing, we surface warnings and downgrade ``qa`` so downstream
+    (and the UI) can flag the result for review instead of trusting it blindly.
+    """
+    res2 = transform.res * transform.res
+    comp_px = int(component.sum())
+    comp_sqft = round(comp_px * res2, 1)
+    # mask area that the target component dropped == detached neighbouring
+    # structures (garages, sheds, the next house) isolated out of the 50 m tile
+    dropped_sqft = round(int(((mask > 0) & ~component).sum()) * res2, 1)
+
+    # how well the planes explain the building: min residual per pixel
+    best_resid = np.full(dsm.shape, np.inf, dtype=float)
+    for a, b, c in planes:
+        best_resid = np.minimum(best_resid, np.abs(a * Xg + b * Yg + c - dsm))
+    comp_resid = best_resid[component] if comp_px else np.array([0.0])
+    mean_resid = float(comp_resid.mean())
+    p95_resid = float(np.percentile(comp_resid, 95)) if comp_px else 0.0
+    unassigned = int((component & (best_resid > max_residual)).sum())
+    unassigned_pct = round(100.0 * unassigned / max(comp_px, 1), 1)
+
+    facet_areas = sorted((round(_poly_area_sqft(f["verts"]), 1) for f in facets),
+                         reverse=True)
+    edge_counts = {k: int(lines.get(k, {}).get("count", 0))
+                   for k in ("ridge", "hip", "valley", "rake", "eave")}
+    n_edges = sum(edge_counts.values())
+    n_facets = len(facets)
+
+    # ---- confidence warnings ----
+    warnings: List[str] = []
+    if n_facets == 0:
+        warnings.append("no_facets_recovered")
+    if unassigned_pct >= 12.0:
+        warnings.append(f"high_unassigned_pixels:{unassigned_pct}pct")
+    if mean_resid >= 1.0 or p95_resid >= max_residual * 1.5:
+        warnings.append(f"noisy_or_obstructed_dsm:mean_resid_{round(mean_resid,2)}ft")
+    if dropped_sqft > 60.0:
+        # we kept one building out of several in the tile (expected, informational)
+        warnings.append("multiple_structures_in_tile")
+    # eave/rake explosion: many short unshared boundary edges per facet means the
+    # facets didn't weld into a coherent skeleton
+    if n_facets and (edge_counts["rake"] + edge_counts["eave"]) > 5 * n_facets:
+        warnings.append("possible_edge_fragmentation")
+    if used_fallback:
+        warnings.append("regularization_fallback")
+    if roof_area > 0 and covered < 0.8 * roof_area:
+        warnings.append(f"low_facet_coverage:{round(100*covered/roof_area)}pct")
+    # diagram polygons still overlap after the topology guard -> not presentable
+    polys_overlap = bool(cleanup.get("qa_required"))
+    if polys_overlap:
+        warnings.append("diagram_polygons_overlap")
+
+    # ---- QA flag ----
+    serious = (n_facets == 0
+               or unassigned_pct >= 25.0
+               or mean_resid >= 2.0
+               or "possible_edge_fragmentation" in warnings
+               or (roof_area > 0 and covered < 0.6 * roof_area))
+    if serious:
+        qa = "low_confidence"
+    elif polys_overlap or (warnings and warnings != ["multiple_structures_in_tile"]):
+        qa = "review"
+    else:
+        qa = "ok"
+
+    return {
+        "qa": qa,
+        "warnings": warnings,
         "grid": [int(dsm.shape[0]), int(dsm.shape[1])],
-        "roof_area_sqft": round(float(int((labels >= 0).sum()) * res2), 1),
+        "res_ft": round(transform.res, 3),
         "mask_sqft": round(mask_sqft, 1),
-        "facet_areas_sqft": sorted(
-            (round(float(int((labels == i).sum()) * res2), 1) for i in range(len(planes))),
-            reverse=True),
+        "target_component_sqft": comp_sqft,
+        "dropped_structures_sqft": dropped_sqft,
+        "n_merged_priors": n_merged_priors,
+        "n_priors_in": n_priors_in,
+        "n_planes_kept": len(planes),
+        "n_facets": n_facets,
+        "facet_areas_sqft": facet_areas,
+        "roof_area_sqft": round(roof_area, 1),
+        "covered_sqft": round(covered, 1),
+        "coverage_pct": round(100.0 * covered / roof_area, 1) if roof_area else 0.0,
+        "unassigned_pct": unassigned_pct,
+        "mean_residual_ft": round(mean_resid, 2),
+        "p95_residual_ft": round(p95_resid, 2),
+        "edge_counts": edge_counts,
+        "n_edges": n_edges,
+        "used_fallback": used_fallback,
+        "diagram_labeler": diagram_labeler,
+        # ---- diagram polygon-quality / topology-cleanup overlay ----
+        "qa_required": polys_overlap,
+        "polygons_before_cleanup": cleanup.get("polygons_before_cleanup", n_facets),
+        "polygons_after_cleanup": cleanup.get("polygons_after_cleanup", n_facets),
+        "rejected_polygons": cleanup.get("rejected_polygons", []),
+        "diagram_overlap_sqft": cleanup.get("overlap_sqft", 0.0),
+        "raw_labels": _label_overlay(clean, component),
         "planes_abc": [[round(p[0], 3), round(p[1], 3), round(p[2], 1)] for p in planes],
         "segs": seg_diag,
     }
-    return snapped, lines, debug
 
 
 # ---------- orchestrator ----------

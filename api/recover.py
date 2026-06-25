@@ -34,6 +34,10 @@ def _first_float(values):
         return None
 
 
+def _truthy(value):
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
 class handler(BaseHTTPRequestHandler):
     def _send(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
@@ -76,4 +80,9 @@ class handler(BaseHTTPRequestHandler):
                 return
 
         result = recover_geometry(lat, lng, key=key)
+        # The recovery debug payload (planes, residuals, labeler, warnings, ...) is
+        # verbose and internal; include it only when explicitly requested with
+        # ?debug=1 so the normal response stays lean.
+        if not _truthy(_first(params.get("debug"))):
+            result.pop("debug", None)
         self._send(200, result)
