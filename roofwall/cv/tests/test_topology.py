@@ -179,6 +179,110 @@ def test_pearl_falls_back_gracefully_without_maxflow(monkeypatch):
     assert len(m.facets) >= 1            # greedy labels still yield a usable roof
 
 
+# ---------------------------------------------------------------- polygon cleanup
+def _polys(model):
+    from shapely.geometry import Polygon
+    out = []
+    for f in model.to_edge_facets():
+        xy = [(v[0], v[1]) for v in f.verts]
+        if len(xy) >= 3:
+            out.append(Polygon(xy))
+    return out
+
+
+def test_diagram_polygons_are_clean_and_non_overlapping():
+    for facets in (gable_roof(40, 24, 6), hip_roof(40, 24, 6), cross_gable()):
+        m = _model(facets)
+        ps = _polys(m)
+        assert all(p.is_valid for p in ps), "self-intersecting polygon in roof_diagram"
+        ov = sum(ps[i].intersection(ps[j]).area
+                 for i in range(len(ps)) for j in range(i + 1, len(ps)))
+        assert ov < 2.0, f"facets overlap by {ov:.1f} sqft"
+        assert m.debug["qa_required"] is False
+        assert m.debug["diagram_overlap_sqft"] < 2.0
+
+
+def test_clean_facet_polygons_unit():
+    from roofwall.cv.light import _clean_facet_polygons
+    from roofwall.cv.recover import RasterTransform
+    from shapely.geometry import Polygon
+
+    t = RasterTransform(x0=0, y0=0, res=0.5, nrows=100)
+
+    def F(fid, xy):
+        return {"id": fid, "verts": [(x, y, 0.0) for x, y in xy]}
+
+    facets = [
+        F("A", [(0, 0), (20, 0), (20, 20), (0, 20)]),          # 400 sqft
+        F("B", [(15, 0), (35, 0), (35, 20), (15, 20)]),        # overlaps A by 100
+        F("star", [(40, 0), (60, 20), (40, 20), (60, 0)]),     # bowtie self-intersection
+        F("sliver", [(0, 30), (40, 30), (40, 31), (0, 31)]),   # 1 ft thick
+        F("tiny", [(50, 30), (53, 30), (53, 33), (50, 33)]),   # 9 sqft < min
+    ]
+    foot = Polygon([(0, 0), (60, 0), (60, 40), (0, 40)])
+    clean, dbg = _clean_facet_polygons(facets, foot, t, min_facet_area_sqft=25.0)
+
+    out = [Polygon([(v[0], v[1]) for v in f["verts"]]) for f in clean]
+    assert all(p.is_valid for p in out)               # no self-intersection in output
+    ov = sum(out[i].intersection(out[j]).area
+             for i in range(len(out)) for j in range(i + 1, len(out)))
+    assert ov < 1e-6                                  # overlaps removed
+    reasons = {r["reason"] for r in dbg["rejected_polygons"]}
+    assert "sliver" in reasons and "below_min_area" in reasons
+    assert dbg["polygons_before_cleanup"] == 5
+    assert dbg["polygons_after_cleanup"] == len(clean)
+
+
+def test_clean_facet_polygons_splits_disconnected_label():
+    # a facet clipped into two disconnected pieces (a neighbour cutting through the
+    # middle) must split into two separate facets, not one self-touching polygon.
+    from roofwall.cv.light import _clean_facet_polygons
+    from roofwall.cv.recover import RasterTransform
+    from shapely.geometry import Polygon
+
+    t = RasterTransform(x0=0, y0=0, res=0.5, nrows=100)
+    facets = [
+        # the bigger bar is placed first and keeps its area...
+        {"id": "BIG", "verts": [(0, 0, 0), (30, 0, 0), (30, 10, 0), (0, 10, 0)]},
+        # ...the smaller crossing bar gets cut into two disconnected halves by it
+        {"id": "SPLIT", "verts": [(12, -6, 0), (18, -6, 0), (18, 16, 0), (12, 16, 0)]},
+    ]
+    foot = Polygon([(-5, -10), (40, -10), (40, 20), (-5, 20)])
+    clean, dbg = _clean_facet_polygons(facets, foot, t, min_facet_area_sqft=25.0)
+    split_pieces = [f for f in clean if f["id"].startswith("SPLIT")]
+    assert len(split_pieces) == 2                      # disconnected halves split out
+
+
+def test_overlap_flagged_sets_qa_required(monkeypatch):
+    # If the topology guard ever leaves residual overlap, recovery must NOT present
+    # the diagram as final: qa_required=true + the specific warning.
+    import roofwall.cv.light as L
+    real = L._clean_facet_polygons
+
+    def leak_overlap(facets, footprint, transform, **kw):
+        clean, dbg = real(facets, footprint, transform, **kw)
+        dbg["qa_required"] = True
+        dbg["overlap_sqft"] = 9.9
+        return clean, dbg
+
+    monkeypatch.setattr(L, "_clean_facet_polygons", leak_overlap)
+    m = _model(hip_roof(40, 24, 6))
+    assert m.debug["qa_required"] is True
+    assert "diagram_polygons_overlap" in m.debug["warnings"]
+    assert m.debug["qa"] in ("review", "low_confidence")
+
+
+def test_debug_overlay_fields_present():
+    m = _model(hip_roof(40, 24, 6))
+    d = m.debug
+    for key in ("diagram_labeler", "polygons_before_cleanup", "polygons_after_cleanup",
+                "rejected_polygons", "diagram_overlap_sqft", "qa_required", "raw_labels"):
+        assert key in d, f"missing debug overlay field: {key}"
+    rl = d["raw_labels"]
+    assert set(rl) == {"origin", "shape", "labels"}
+    assert len(rl["labels"]) == rl["shape"][0]        # one row per shape height
+
+
 def test_pearl_labels_returns_labeler_tag():
     # Unit-level: _pearl_labels reports which labeler ran for both paths.
     import numpy as np

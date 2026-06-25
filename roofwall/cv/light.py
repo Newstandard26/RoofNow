@@ -1033,6 +1033,121 @@ def _regularized_facets(clean, dplanes, component, transform, *, simplify_ft,
     return facets
 
 
+def _footprint_polygon(component, transform, simplify_ft):
+    """Shapely polygon of the target-building footprint (holes filled) or None."""
+    try:
+        from shapely.geometry import Polygon
+    except Exception:
+        return None
+    fp = _trace_region(_fill_holes(component), (0.0, 0.0, 0.0), transform, simplify_ft)
+    if len(fp) < 3:
+        return None
+    poly = Polygon([(x, y) for x, y, _ in fp]).buffer(0)
+    if poly.is_empty:
+        return None
+    if poly.geom_type == "MultiPolygon":
+        poly = max(poly.geoms, key=lambda g: g.area)
+    return poly
+
+
+def _clean_facet_polygons(facets, footprint, transform, *, min_facet_area_sqft,
+                          sliver_erode_ft=0.75, overlap_tol_sqft=2.0):
+    """Final topology guard for the roof_diagram polygons.
+
+    Whatever path produced the facets (the regularized arrangement, or the raster
+    fallback which deliberately overlaps neighbours by a couple of pixels), this
+    guarantees the returned diagram is presentable:
+
+    * fix / reject self-intersecting ("star"/pinch) polygons,
+    * enforce pairwise non-overlap (each facet is differenced against the union of
+      the already-placed, larger facets — winner-keeps-area), which also snaps the
+      shared boundary to a single coincident edge,
+    * clip every facet to the target building footprint,
+    * split a label that spans disconnected regions into separate facets,
+    * drop sliver triangles (erode by ``sliver_erode_ft`` empties them).
+
+    Each surviving facet is re-lifted to 3D from a plane fit to its own vertices.
+    Returns ``(clean_facets, dbg)``. If shapely is unavailable it is a no-op
+    (facets unchanged, ``qa_required`` False) so the light path still works.
+    """
+    dbg = {"polygons_before_cleanup": len(facets),
+           "polygons_after_cleanup": len(facets),
+           "rejected_polygons": [], "overlap_sqft": 0.0, "qa_required": False}
+    try:
+        from shapely.geometry import Polygon
+    except Exception:
+        return facets, dbg
+
+    items = []
+    for f in facets:
+        verts = f["verts"]
+        if len(verts) < 3:
+            dbg["rejected_polygons"].append({"id": str(f["id"]), "reason": "degenerate"})
+            continue
+        poly = Polygon([(v[0], v[1]) for v in verts])
+        if not poly.is_valid:
+            poly = poly.buffer(0)            # heals self-touching star / pinch
+        if poly.is_empty or poly.geom_type not in ("Polygon", "MultiPolygon"):
+            dbg["rejected_polygons"].append({"id": str(f["id"]),
+                                             "reason": "self_intersecting"})
+            continue
+        zs = np.array([v[2] for v in verts])
+        plane = _fit_plane(np.array([v[0] for v in verts]),
+                           np.array([v[1] for v in verts]), zs) or \
+            (0.0, 0.0, float(zs.mean()))
+        items.append((str(f["id"]), plane, poly))
+    # largest first: reliable big facets keep their area, smaller ones get clipped
+    items.sort(key=lambda t: t[1] and t[2].area, reverse=True)
+
+    accepted = []
+    placed = None
+    for fid, plane, poly in items:
+        p = poly.difference(placed) if placed is not None else poly
+        if footprint is not None and not p.is_empty:
+            p = p.intersection(footprint)
+        if p.is_empty:
+            dbg["rejected_polygons"].append({"id": fid, "reason": "fully_overlapped_or_outside"})
+            continue
+        pieces = list(p.geoms) if p.geom_type == "MultiPolygon" else [p]
+        n_pieces = sum(1 for g in pieces if g.geom_type == "Polygon")
+        idx = 0
+        for piece in pieces:
+            piece = piece.buffer(0)
+            if piece.is_empty or piece.geom_type != "Polygon":
+                continue
+            if piece.area < min_facet_area_sqft:
+                dbg["rejected_polygons"].append({"id": fid, "reason": "below_min_area"})
+                continue
+            if piece.buffer(-sliver_erode_ft).is_empty:
+                dbg["rejected_polygons"].append({"id": fid, "reason": "sliver"})
+                continue
+            new_id = fid if n_pieces == 1 else f"{fid}#{idx}"
+            idx += 1
+            accepted.append((new_id, plane, piece))
+            placed = piece if placed is None else placed.union(piece)
+
+    # residual overlap (should be ~0 by construction) -> QA gate
+    overlap = 0.0
+    for i in range(len(accepted)):
+        for j in range(i + 1, len(accepted)):
+            inter = accepted[i][2].intersection(accepted[j][2])
+            if inter.geom_type in ("Polygon", "MultiPolygon") and not inter.is_empty:
+                overlap += inter.area
+    dbg["overlap_sqft"] = round(overlap, 2)
+    dbg["qa_required"] = overlap > overlap_tol_sqft
+
+    clean = []
+    for fid, plane, poly in accepted:
+        poly = poly.simplify(0.5)
+        coords = list(poly.exterior.coords)[:-1]
+        if len(coords) < 3:
+            continue
+        clean.append({"id": fid,
+                      "verts": [(x, y, plane_z(plane, x, y)) for x, y in coords]})
+    dbg["polygons_after_cleanup"] = len(clean)
+    return clean, dbg
+
+
 def _pearl_labels(dsm, region, transform, Xg, Yg, planes, *,
                   lam=1.0, iters=4, rmax=6.0):
     """Coherent plane labelling by graph-cut energy minimization (PEARL).
@@ -1185,6 +1300,13 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
                                   min_facet_area_sqft=min_facet_area_sqft)
         snapped = snap_model(facets, snap_tol=snap_tol, edge_tol=edge_tol)
         covered = sum(_poly_area_sqft(f["verts"]) for f in facets)
+    # Final topology guard: make the roof_diagram polygons simple, non-overlapping,
+    # clipped to the footprint and sliver-free regardless of which path produced
+    # them (the raster fallback overlaps neighbours by design). Does NOT touch the
+    # measurement path below — line_lengths come from `labels`, not these polygons.
+    footprint_poly = _footprint_polygon(component, transform, simplify_ft)
+    snapped, cleanup = _clean_facet_polygons(
+        snapped, footprint_poly, transform, min_facet_area_sqft=min_facet_area_sqft)
     # Line lengths from the plane geometry (accurate even when facets don't
     # weld); imported lazily to avoid a module import cycle.
     from roofwall.cv.lines import measure_lines
@@ -1196,13 +1318,26 @@ def recover_light(dsm, mask, transform, priors, *, max_residual=2.0, simplify_ft
         roof_area=roof_area, covered=covered, max_residual=max_residual,
         n_priors_in=n_priors_in, n_merged_priors=n_merged_priors,
         used_fallback=used_fallback, diagram_labeler=diagram_labeler,
-        Xg=Xg, Yg=Yg, seg_diag=seg_diag)
+        cleanup=cleanup, Xg=Xg, Yg=Yg, seg_diag=seg_diag)
     return snapped, lines, debug
+
+
+def _label_overlay(clean, component):
+    """Cropped raw diagram-label grid for a debug overlay: {origin, shape, labels}."""
+    ys, xs = np.nonzero(component)
+    if len(ys) == 0:
+        return {"origin": [0, 0], "shape": [0, 0], "labels": []}
+    r0, r1 = int(ys.min()), int(ys.max()) + 1
+    c0, c1 = int(xs.min()), int(xs.max()) + 1
+    crop = clean[r0:r1, c0:c1]
+    return {"origin": [r0, c0], "shape": [int(crop.shape[0]), int(crop.shape[1])],
+            "labels": crop.astype(int).tolist()}
 
 
 def _recovery_debug(*, dsm, mask, transform, planes, component, clean, facets, lines,
                     mask_sqft, roof_area, covered, max_residual, n_priors_in,
-                    n_merged_priors, used_fallback, diagram_labeler, Xg, Yg, seg_diag):
+                    n_merged_priors, used_fallback, diagram_labeler, cleanup, Xg, Yg,
+                    seg_diag):
     """Assemble the recovery debug payload + confidence warnings and a QA flag.
 
     We never fabricate geometry: when the DSM is poorly explained by the recovered
@@ -1253,6 +1388,10 @@ def _recovery_debug(*, dsm, mask, transform, planes, component, clean, facets, l
         warnings.append("regularization_fallback")
     if roof_area > 0 and covered < 0.8 * roof_area:
         warnings.append(f"low_facet_coverage:{round(100*covered/roof_area)}pct")
+    # diagram polygons still overlap after the topology guard -> not presentable
+    polys_overlap = bool(cleanup.get("qa_required"))
+    if polys_overlap:
+        warnings.append("diagram_polygons_overlap")
 
     # ---- QA flag ----
     serious = (n_facets == 0
@@ -1262,7 +1401,7 @@ def _recovery_debug(*, dsm, mask, transform, planes, component, clean, facets, l
                or (roof_area > 0 and covered < 0.6 * roof_area))
     if serious:
         qa = "low_confidence"
-    elif warnings and warnings != ["multiple_structures_in_tile"]:
+    elif polys_overlap or (warnings and warnings != ["multiple_structures_in_tile"]):
         qa = "review"
     else:
         qa = "ok"
@@ -1290,6 +1429,13 @@ def _recovery_debug(*, dsm, mask, transform, planes, component, clean, facets, l
         "n_edges": n_edges,
         "used_fallback": used_fallback,
         "diagram_labeler": diagram_labeler,
+        # ---- diagram polygon-quality / topology-cleanup overlay ----
+        "qa_required": polys_overlap,
+        "polygons_before_cleanup": cleanup.get("polygons_before_cleanup", n_facets),
+        "polygons_after_cleanup": cleanup.get("polygons_after_cleanup", n_facets),
+        "rejected_polygons": cleanup.get("rejected_polygons", []),
+        "diagram_overlap_sqft": cleanup.get("overlap_sqft", 0.0),
+        "raw_labels": _label_overlay(clean, component),
         "planes_abc": [[round(p[0], 3), round(p[1], 3), round(p[2], 1)] for p in planes],
         "segs": seg_diag,
     }
