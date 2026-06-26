@@ -1,8 +1,8 @@
-"""AI summary + "why this estimate" — natural-language explanation of the data.
+"""AI summary + "why this estimate" (Phase 2.1: success framing).
 
-Deterministic, template-driven text generated from the real measurement + quote
-(no external LLM call), so the homeowner-facing narrative always matches the
-numbers it sits next to. Pure functions; fully unit-testable.
+Deterministic, template-driven copy generated from the real measurement + quote
+(no external LLM). The language focuses on a successful analysis and homeowner
+value — never on what the AI couldn't reconstruct. Pure, unit-testable.
 """
 
 from __future__ import annotations
@@ -18,24 +18,11 @@ def _sqft(squares: Optional[float]) -> Optional[int]:
     return int(round(squares * ROOFING_SQUARE_SQFT))
 
 
-def _confidence_sentence(confidence: Dict[str, Any]) -> str:
-    band = (confidence or {}).get("band")
-    pct = (confidence or {}).get("confidence_pct")
-    if band == "high":
-        return (f"Our aerial measurements came back clean, so we're highly confident "
-                f"in this estimate ({pct}% confidence).")
-    if band == "medium":
-        return (f"We measured most of your roof from imagery ({pct}% confidence); a "
-                f"free on-site verification will lock in the exact figure.")
-    return ("We couldn't fully trace your roof from imagery, so this is a budgetary "
-            "range — a free on-site verification will confirm your exact estimate.")
-
-
 def build_ai_summary(report: Dict[str, Any], quote: Dict[str, Any]) -> Dict[str, Any]:
-    """A short, data-grounded narrative + scannable highlights."""
+    """A confident, data-grounded narrative + scannable highlights."""
     roof = report.get("roof") or {}
     confidence = quote.get("confidence") or {}
-    pr = quote.get("price_range") or {}
+    reliable = confidence.get("reliable", True)
 
     squares = roof.get("total_squares")
     sqft = _sqft(squares)
@@ -43,74 +30,78 @@ def build_ai_summary(report: Dict[str, Any], quote: Dict[str, Any]) -> Dict[str,
     complexity = roof.get("structure_complexity")
     facets = roof.get("facet_count")
 
-    parts: List[str] = []
-    if sqft:
-        size = f"approximately {sqft:,} sq ft"
-        if squares:
-            size += f" (about {round(squares)} squares)"
-        face = f" across {facets} roof faces" if facets else ""
-        pitchtxt = f" at a {pitch} pitch" if pitch else ""
-        comptxt = f", a {complexity.lower()} roof" if complexity else ""
-        parts.append(f"RoofNow measured your roof at {size}{face}{pitchtxt}{comptxt}.")
+    if not reliable or not sqft:
+        text = ("RoofNow analyzed your property using aerial imagery and AI roof "
+                "measurement technology. To give you the most accurate estimate for this "
+                "home, a New Standard Restoration expert will measure your roof during a "
+                "complimentary on-site verification.")
     else:
-        parts.append("RoofNow located your property and prepared a budgetary estimate "
-                     "from its footprint.")
-    if pr.get("display"):
-        parts.append(f"Based on those measurements and local New Standard Restoration "
-                     f"pricing, a full replacement is estimated at {pr['display']}.")
-    parts.append(_confidence_sentence(confidence))
+        size = f"approximately {round(squares)} squares"
+        pitchtxt = f" with a dominant {pitch} pitch" if pitch else ""
+        text = (
+            "RoofNow analyzed your property using aerial imagery and AI roof measurement "
+            f"technology. Based on the available data, your roof is estimated at {size}"
+            f"{pitchtxt}. The estimate below represents a realistic replacement cost range "
+            "for roofs of similar size and complexity in your area. Your free roof "
+            "verification confirms field conditions such as decking, flashing, "
+            "ventilation, and material selections before your final proposal."
+        )
 
     highlights: List[Dict[str, str]] = []
     if sqft:
         highlights.append({"label": "Roof area", "value": f"~{sqft:,} sq ft"})
+    if squares:
+        highlights.append({"label": "Roofing squares", "value": f"{round(squares)} sq"})
     if pitch:
         highlights.append({"label": "Pitch", "value": str(pitch)})
     if complexity:
         highlights.append({"label": "Complexity", "value": str(complexity)})
-    if facets:
-        highlights.append({"label": "Roof faces", "value": str(facets)})
 
-    return {"text": " ".join(parts), "highlights": highlights}
+    return {"text": text, "highlights": highlights}
 
 
 def build_price_explanation(report: Dict[str, Any], quote: Dict[str, Any]) -> Dict[str, Any]:
-    """"Why this estimate?" — the measured drivers behind the price."""
+    """"Why this estimate?" — homeowner-language price drivers (no jargon)."""
     roof = report.get("roof") or {}
     measurement = quote.get("measurement") or {}
     drivers: List[Dict[str, str]] = []
 
     order_sq = measurement.get("order_squares") or roof.get("order_squares")
-    if order_sq:
+    squares = measurement.get("total_squares") or roof.get("total_squares")
+    if squares:
         drivers.append({
             "label": "Roof size",
-            "value": f"{round(order_sq)} squares to install",
-            "note": "Measured area plus a standard waste factor.",
-        })
-    pitch = roof.get("predominant_pitch")
-    if pitch:
-        drivers.append({
-            "label": "Pitch",
-            "value": str(pitch),
-            "note": "Steeper roofs take more labor, staging, and safety setup.",
+            "value": f"about {round(squares)} squares",
+            "note": "The bigger the roof, the more material and labor it takes.",
         })
     complexity = roof.get("structure_complexity")
     if complexity:
         drivers.append({
-            "label": "Complexity",
+            "label": "Roof complexity",
             "value": str(complexity),
-            "note": "More valleys, hips, and facets mean more cutting, flashing, and waste.",
+            "note": "More angles and edges add cutting, detail work, and time.",
         })
-    waste = roof.get("suggested_waste_pct") or measurement.get("suggested_waste_pct")
-    if waste:
+    pitch = roof.get("predominant_pitch")
+    if pitch:
         drivers.append({
-            "label": "Waste factor",
-            "value": f"{waste}%",
-            "note": "Material overage for cuts, starter, and ridge.",
+            "label": "Roof steepness",
+            "value": str(pitch),
+            "note": "Steeper roofs take more setup and labor to install safely.",
         })
+    drivers.append({
+        "label": "Material quality",
+        "value": "Good · Better · Best",
+        "note": "Your shingle line and warranty — you choose the package below.",
+    })
+    drivers.append({
+        "label": "Labor & accessories",
+        "value": "Included",
+        "note": "Tear-off, underlayment, flashing, vents, and cleanup are built in.",
+    })
 
     return {
         "headline": "Why this estimate?",
-        "basis": ("Your price is the installed cost per roofing square multiplied by your "
-                  "measured roof size, then adjusted for pitch and complexity."),
+        "basis": ("Your range reflects your roof's size, shape, and steepness, the material "
+                  "package you choose, and local installed pricing."),
         "drivers": drivers,
     }

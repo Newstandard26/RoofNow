@@ -61,13 +61,10 @@ def _lead_block(lead: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 
 
 def _manual_review_report(address: Optional[str], lead: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    """Measurement unavailable -> honest low-confidence report + manual CTA."""
-    confidence = {
-        "confidence_pct": 35, "band": "low", "margin_of_error_pct": 30,
-        "reasons": [],
-        "warnings": ["We couldn't measure this roof from aerial imagery — a free on-site "
-                     "verification will produce your estimate."],
-    }
+    """Measurement unavailable -> manual-review report (positive framing)."""
+    from roofwall.quote.estimate_confidence import assess_estimate
+
+    confidence = assess_estimate({}).to_dict()   # "Manual Review Recommended"
     out: Dict[str, Any] = {
         "brand": brand_block(),
         "status": "manual_review",
@@ -75,12 +72,11 @@ def _manual_review_report(address: Optional[str], lead: Optional[Dict[str, Any]]
                      "data_source": None, "imagery_date": None},
         "roof_snapshot": _roof_snapshot({}),
         "confidence": confidence,
-        "ai_summary": {"text": ("RoofNow located your property but couldn't measure the roof "
-                                "from current imagery. New Standard Restoration will prepare "
-                                "your estimate during a free on-site verification."),
-                       "highlights": []},
+        "engineering_confidence": None,
+        "ai_summary": build_ai_summary({}, {"confidence": confidence}),
         "price_explanation": {"headline": "Why this estimate?",
-                              "basis": "A precise estimate needs an on-site measurement for this property.",
+                              "basis": ("Your estimate will be measured in person to make sure "
+                                        "it's accurate for this property."),
                               "drivers": []},
         "quote": None,
         "roof_health": build_roof_health({}),
@@ -117,16 +113,17 @@ def build_property_report(
         return _manual_review_report(address, lead)
 
     quote = build_quote(report)
-    confidence = quote.get("confidence") or {}
-    roof = report.get("roof") or {}
-    found = report.get("mode") == "live" and bool(roof.get("facet_count"))
+    confidence = quote.get("confidence") or {}        # customer Estimate Confidence
+    reliable = bool(confidence.get("reliable", True))
 
     out: Dict[str, Any] = {
         "brand": brand_block(),
-        "status": "estimated" if found else "manual_review",
+        "status": "estimated" if reliable else "manual_review",
         "property": _property_block(report, address),
         "roof_snapshot": _roof_snapshot(report),
         "confidence": confidence,
+        # Internal geometry QA — stored for admin/QA, never rendered to customers.
+        "engineering_confidence": quote.get("engineering_confidence"),
         "ai_summary": build_ai_summary(report, quote),
         "price_explanation": build_price_explanation(report, quote),
         "quote": {
@@ -136,7 +133,7 @@ def build_property_report(
         },
         "roof_health": build_roof_health(report),
         "storm_exposure": build_storm_exposure(report),
-        "recommended_next_step": build_recommendation(confidence, found=found),
+        "recommended_next_step": build_recommendation(confidence, found=reliable),
         "disclaimer": REPORT_DISCLAIMER,
     }
     lb = _lead_block(lead)

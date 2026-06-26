@@ -1,8 +1,7 @@
-"""Roof health section — Phase 2 placeholder.
+"""Roof health section (Phase 2.1: a value-add, not a "placeholder").
 
-A real condition assessment needs on-site (or close-range) inspection, so Phase 2
-ships an honest placeholder: it frames what NSR checks during the free
-verification rather than inventing a condition score from aerial data.
+Frames what the free on-site verification checks — positioned as added value
+rather than something the AI couldn't do.
 """
 
 from __future__ import annotations
@@ -12,16 +11,15 @@ from typing import Any, Dict
 
 def build_roof_health(report: Dict[str, Any]) -> Dict[str, Any]:
     return {
-        "headline": "Roof Health",
-        "available": False,
-        "status": "pending_inspection",
-        "message": ("A detailed roof condition assessment — shingle wear, decking, "
-                    "flashing, and ventilation — is performed during your free on-site "
-                    "verification by New Standard Restoration."),
+        "headline": "What we'll verify during your free roof assessment",
+        "available": True,
+        "message": ("Your aerial estimate covers size, pitch, and replacement cost. During "
+                    "your complimentary on-site assessment, a New Standard Restoration "
+                    "expert reviews the condition details that finalize your proposal:"),
         "checklist": [
             "Shingle and granule wear",
-            "Flashing and penetrations",
-            "Decking and soft spots",
+            "Decking and any soft spots",
+            "Flashing and roof penetrations",
             "Attic ventilation",
         ],
     }

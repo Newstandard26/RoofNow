@@ -33,19 +33,25 @@ def test_build_quote_shape():
     assert q["address"] == "123 Main St, Springfield"
     assert len(q["estimates"]) == 3
     assert [e["key"] for e in q["estimates"]] == ["good", "better", "best"]
-    assert q["confidence"]["band"] == "high"
+    # Customer-facing confidence is Estimate Confidence (level, not a band/%).
+    assert q["confidence"]["label"] == "Estimate Confidence"
+    assert q["confidence"]["level"] == "Excellent Estimate"
+    assert q["confidence"]["reliable"] is True
+    assert q["estimate_confidence"]["level"] == "Excellent Estimate"
+    # engineering confidence stored internally as a 0-1 float, never a band
+    assert isinstance(q["engineering_confidence"], float)
     assert q["measurement"]["order_squares"] == 27
     assert q["price_range"]["low"] > 0
     assert q["price_range"]["high"] >= q["price_range"]["low"]
     assert POWERED_BY in q["disclaimer"]
 
 
-def test_low_confidence_widens_quote_range():
+def test_noisier_measurement_widens_range_but_stays_reliable():
     clean = build_quote(_live_report())
     noisy_report = _live_report()
     noisy_report["recovery_status"] = "low_confidence:6"
     noisy_report["roof"]["facets_needing_qa"] = 6
-    noisy_report["roof"]["min_confidence"] = 0.3
+    noisy_report["roof"]["min_confidence"] = 0.3   # messy polygons
     noisy = build_quote(noisy_report)
 
     clean_better = next(e for e in clean["estimates"] if e["key"] == "better")
@@ -53,7 +59,9 @@ def test_low_confidence_widens_quote_range():
     clean_span = clean_better["price_high"] - clean_better["price_low"]
     noisy_span = noisy_better["price_high"] - noisy_better["price_low"]
     assert noisy_span > clean_span
-    assert noisy["confidence"]["band"] == "low"
+    # messy geometry must NOT read as "low" — the estimate is still trustworthy
+    assert noisy["confidence"]["reliable"] is True
+    assert noisy["confidence"]["level"] in ("Excellent Estimate", "Very Good Estimate")
 
 
 def test_order_squares_falls_back_to_waste_grossup():
@@ -71,7 +79,7 @@ def test_preview_has_confidence_but_no_prices():
     assert p["found"] is True
     assert p["ready"] is True
     assert p["headline"] == "We found your roof"
-    assert p["confidence"]["band"] == "high"
+    assert p["confidence"]["level"] == "Excellent Estimate"
     assert p["roof"]["total_squares"] == 24.0
     # pricing stays gated — no Good/Better/Best leaks into the teaser
     assert "estimates" not in p
@@ -89,11 +97,12 @@ def test_preview_demo_not_found_but_ready():
     assert "estimates" not in p
 
 
-def test_demo_report_still_quotes_but_low_confidence():
+def test_demo_report_is_manual_review():
     report = _live_report()
     report["mode"] = "demo"
     report["demo_reason"] = "no_api_key"
     q = build_quote(report)
-    assert q["confidence"]["band"] == "low"
+    assert q["confidence"]["level"] == "Manual Review Recommended"
+    assert q["confidence"]["reliable"] is False
     assert len(q["estimates"]) == 3
     assert q["price_range"]["low"] > 0

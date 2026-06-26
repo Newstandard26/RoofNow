@@ -33,10 +33,16 @@ from typing import Any, Dict, List, Optional, Tuple
 
 DEFAULT_NOTIFY_TO = "mattk@newstandardrestoration.com"
 
-# Confidence band -> LeadConnector "Capture Confidence" custom-field value.
-_CAPTURE_CONFIDENCE = {"high": "Complete", "medium": "Partial", "low": "Needs Review"}
-# Confidence band -> CRM lead priority.
-_LEAD_PRIORITY = {"high": "Hot", "medium": "Warm", "low": "Cold"}
+# Estimate-confidence level -> LeadConnector "Capture Confidence" field value.
+_CAPTURE_CONFIDENCE = {
+    "Excellent": "Complete", "Very Good": "Complete",
+    "Preliminary": "Partial", "Manual Review": "Needs Review",
+}
+# Estimate-confidence level -> CRM lead priority.
+_LEAD_PRIORITY = {
+    "Excellent": "Hot", "Very Good": "Hot",
+    "Preliminary": "Warm", "Manual Review": "Cold",
+}
 
 
 def lead_to_webhook_payload(
@@ -51,7 +57,8 @@ def lead_to_webhook_payload(
     """
     pr = (quote or {}).get("price_range") or {}
     conf = (quote or {}).get("confidence") or {}
-    band = conf.get("band")
+    headline = conf.get("headline")           # "Excellent" / "Very Good" / ...
+    acc = conf.get("accuracy_pct")
     low = pr.get("low", lead.get("estimate_low"))
     high = pr.get("high", lead.get("estimate_high"))
     estimate_display = pr.get("display")
@@ -71,10 +78,12 @@ def lead_to_webhook_payload(
         "estimate_low": low,
         "estimate_high": high,
         "estimate_amount": estimate_display,
-        "confidence_band": band,
-        "confidence_pct": conf.get("confidence_pct"),
-        "capture_confidence": _CAPTURE_CONFIDENCE.get(band) if band else None,
-        "lead_priority": _LEAD_PRIORITY.get(band) if band else None,
+        # confidence (Estimate Confidence — customer model)
+        "confidence_band": headline,                 # kept key; now the estimate level
+        "confidence_level": conf.get("level"),
+        "estimate_accuracy": f"±{acc}%" if acc else None,
+        "capture_confidence": _CAPTURE_CONFIDENCE.get(headline) if headline else None,
+        "lead_priority": _LEAD_PRIORITY.get(headline) if headline else None,
         # CRM routing defaults (RoofNow is a website roof-replacement intake form)
         "source": "RoofNow Instant Quote",
         "lead_source_detail": "Website Form",
@@ -109,9 +118,11 @@ def _summary_lines(lead: Dict[str, Any], quote: Optional[Dict[str, Any]]) -> Lis
         if pr.get("display"):
             lines.append(f"Instant estimate: {pr['display']}")
         conf = quote.get("confidence") or {}
-        if conf.get("band"):
+        if conf.get("level"):
+            acc = conf.get("accuracy_pct")
             lines.append(
-                f"Confidence: {conf['band']} ({conf.get('confidence_pct', '—')}%)"
+                f"Estimate confidence: {conf['level']}"
+                + (f" (±{acc}%)" if acc else "")
             )
     elif lead.get("estimate_low") or lead.get("estimate_high"):
         lines.append(

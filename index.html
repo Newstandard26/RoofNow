@@ -165,7 +165,13 @@
     .verify { background: linear-gradient(180deg, rgba(81,197,244,.10), var(--panel)); border: 1px solid rgba(81,197,244,.30); border-radius: 16px; padding: 24px; margin-top: 18px; text-align: center; }
     .verify h3 { margin: 0 0 6px; font-size: 22px; }
     .verify p { color: var(--muted); margin: 0 0 16px; }
-    .verify a.btn { display: inline-block; padding: 16px 28px; font-size: 16px; font-weight: 800; color: #08151e; text-decoration: none; background: linear-gradient(90deg, var(--accent), var(--accent-deep)); border-radius: 12px; }
+    .verify a.btn, .verify .btn { display: inline-block; padding: 16px 28px; font-size: 16px; font-weight: 800; color: #08151e; text-decoration: none; background: linear-gradient(90deg, var(--accent), var(--accent-deep)); border-radius: 12px; }
+    .vchecklist { display: inline-grid; gap: 8px; text-align: left; margin: 4px auto 18px; }
+    .vcheck { color: var(--ink); font-size: 14.5px; }
+    .vcheck b { color: var(--accent); margin-right: 8px; }
+    ul.checklist { list-style: none; padding: 0; margin: 12px 0 0; }
+    ul.checklist li { padding: 6px 0 6px 24px; position: relative; color: var(--muted); font-size: 14px; }
+    ul.checklist li::before { content: "✓"; position: absolute; left: 0; color: var(--accent); font-weight: 800; }
 
     footer { border-top: 1px solid var(--line); margin-top: 40px; padding: 26px 0 60px; color: var(--muted); font-size: 13.5px; }
     footer b { color: var(--ink); }
@@ -229,7 +235,7 @@
 
         <div class="confline">
           <span class="conf-badge" id="teaserConf">—</span>
-          <span style="color:var(--muted);font-size:14px"><b id="teaserConfPct" style="color:var(--ink)">—</b> confidence</span>
+          <span id="teaserConfText" style="color:var(--muted);font-size:14px"></span>
         </div>
         <div class="ready">✓ Your estimate is ready.</div>
 
@@ -296,7 +302,7 @@
         $("teaser").scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (err) {
         hide($("status"));
-        $("addressErr").textContent = "Sorry — we couldn't measure that address. " + err.message;
+        $("addressErr").textContent = "Please double-check that address and try again.";
       } finally {
         $("goBtn").disabled = false;
       }
@@ -323,9 +329,17 @@
 
       const c = p.confidence || {};
       const b = $("teaserConf");
-      b.textContent = (c.band || "—") + " confidence";
-      b.className = "conf-badge conf-" + (c.band || "low");
-      $("teaserConfPct").textContent = fmtPct(c.confidence_pct);
+      b.textContent = c.level || "Estimate Confidence";
+      b.className = "conf-badge " + confClass(c);
+      $("teaserConfText").textContent = c.accuracy_text ? "Expected pricing accuracy " + c.accuracy_text : "";
+    }
+
+    // Estimate-confidence level -> badge color class.
+    function confClass(c) {
+      const l = String((c && (c.headline || c.level)) || "").toLowerCase();
+      if (l.indexOf("excellent") >= 0 || l.indexOf("very good") >= 0) return "conf-high";
+      if (l.indexOf("prelim") >= 0) return "conf-medium";
+      return "conf-low";
     }
 
     // ---- Step 2: contact -> full quote (gated) ----
@@ -407,9 +421,9 @@
         '<div class="label">Your estimated roof replacement</div>' +
         '<div class="big">' + esc2(pr.display || "Estimate pending inspection") + "</div>" +
         '<div class="addr">' + esc2((rep.property && rep.property.address) || foundAddress || "") + "</div>" +
-        '<div class="confline" style="margin-top:12px"><span class="conf-badge conf-' + esc2(c.band || "low") + '">' +
-          esc2(c.band || "—") + " confidence</span>" +
-          '<span style="color:var(--muted);font-size:14px"><b style="color:var(--ink)">' + esc2(c.confidence_pct != null ? c.confidence_pct + "%" : "—") + "</b> confidence · price accuracy ±" + esc2(c.margin_of_error_pct != null ? c.margin_of_error_pct + "%" : "—") + "</span></div>" +
+        '<div class="confline" style="margin-top:12px"><span class="conf-badge ' + confClass(c) + '">' +
+          esc2((c.label || "Estimate Confidence") + ": " + (c.headline || "")) + "</span>" +
+          '<span style="color:var(--muted);font-size:14px">Expected pricing accuracy ' + esc2(c.accuracy_text || "") + "</span></div>" +
         "</div>");
 
       // Roof snapshot
@@ -428,11 +442,10 @@
       // AI summary
       if (sum.text) html.push('<div class="rsection"><h3>AI summary</h3><p class="ai-text">' + esc2(sum.text) + "</p></div>");
 
-      // Confidence explanation
-      if ((c.reasons && c.reasons.length) || (c.warnings && c.warnings.length)) {
-        const items = (c.reasons || []).map((t) => '<li class="reason">' + esc2(t) + "</li>")
-          .concat((c.warnings || []).map((t) => '<li class="warn">⚠ ' + esc2(t) + "</li>")).join("");
-        html.push('<div class="rsection"><h3>Measurement confidence</h3><ul class="notes">' + items + "</ul></div>");
+      // Estimate Confidence (customer model — success framing, no failure language)
+      if (c.message) {
+        html.push('<div class="rsection"><h3>' + esc2(c.label || "Estimate Confidence") +
+          " — " + esc2(c.level || "") + "</h3><p>" + esc2(c.message) + "</p></div>");
       }
 
       // Pricing tiers
@@ -457,23 +470,24 @@
           "</div>");
       }
 
-      // Roof health (placeholder)
-      html.push('<div class="rsection placeholder"><h3>' + esc2(rh.headline || "Roof Health") +
-        '<span class="tag">During inspection</span></h3><p>' + esc2(rh.message || "") + "</p>" +
-        (rh.checklist ? "<ul>" + rh.checklist.map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul>" : "") + "</div>");
+      // Roof health — value-add ("what we'll verify")
+      html.push('<div class="rsection"><h3>' + esc2(rh.headline || "What we'll verify during your free roof assessment") + "</h3><p>" + esc2(rh.message || "") + "</p>" +
+        (rh.checklist ? '<ul class="checklist">' + rh.checklist.map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul>" : "") + "</div>");
 
-      // Storm exposure (placeholder)
-      html.push('<div class="rsection placeholder"><h3>' + esc2(se.headline || "Storm Exposure") +
-        '<span class="tag">Coming soon</span></h3><p>' + esc2(se.message || "") + "</p></div>");
+      // Storm & damage review — value-add
+      html.push('<div class="rsection"><h3>' + esc2(se.headline || "Storm & damage review") + "</h3><p>" + esc2(se.message || "") + "</p></div>");
 
       // Verification CTA — links to BOOKING_URL when configured; otherwise the
       // lead is already captured and NSR reaches out, so show a confirmation.
       const cta = nx.cta_label || "Schedule Free Roof Verification";
+      const checklist = (nx.checklist || []).map((x) => '<div class="vcheck"><b>✓</b>' + esc2(x) + "</div>").join("");
       const btn = BOOKING_URL
         ? '<a class="btn" href="' + esc2(BOOKING_URL) + '" target="_blank" rel="noopener">' + esc2(cta) + "</a>"
         : '<div class="btn" style="cursor:default">✓ ' + esc2(cta) + " requested</div>" +
           '<p style="margin-top:12px">New Standard Restoration will call you shortly to schedule.</p>';
-      html.push('<div class="verify"><h3>' + esc2(nx.headline || "Recommended next step") + "</h3><p>" + esc2(nx.body || "") + "</p>" + btn + "</div>");
+      html.push('<div class="verify"><h3>' + esc2(nx.headline || "Your estimate is ready") + "</h3><p>" + esc2(nx.body || "") + "</p>" +
+        (checklist ? '<div class="vchecklist">' + checklist + "</div>" : "") + btn +
+        (nx.free_no_obligation ? '<p style="margin-top:12px;font-size:13px">' + esc2(nx.free_no_obligation) + "</p>" : "") + "</div>");
 
       // Disclaimer
       if (rep.disclaimer) html.push('<p class="disclaimer">' + esc2(rep.disclaimer) + "</p>");
