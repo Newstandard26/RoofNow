@@ -158,6 +158,16 @@
     .disclaimer { color: var(--muted); font-size: 12.5px; margin-top: 18px; }
     @media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
 
+    /* Two-column desktop report layout (presentation only) */
+    #result { max-width: 1080px; }
+    .report-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 18px; align-items: start; margin-top: 16px; }
+    .report-left, .report-right { display: grid; gap: 16px; align-content: start; }
+    .report-left > *, .report-right > * { margin: 0 !important; }
+    .report-right .tiers { grid-template-columns: 1fr; }   /* Good/Better/Best stacked */
+    .report-full { display: grid; gap: 16px; margin-top: 18px; }
+    .report-full > * { margin: 0 !important; }
+    @media (max-width: 880px) { #result { max-width: 760px; } .report-grid { grid-template-columns: 1fr; } }
+
     /* ---------------- Trust strip ---------------- */
     .trust-strip { background: var(--white); padding: 34px 0; }
     .trust-strip .inner { max-width: 1180px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: repeat(4, 1fr); }
@@ -497,48 +507,60 @@
       const c = rep.confidence || {}, q = rep.quote || {}, pr = q.price_range || {};
       const snap = rep.roof_snapshot || {}, sum = rep.ai_summary || {}, pe = rep.price_explanation || {};
       const rh = rep.roof_health || {}, se = rep.storm_exposure || {}, nx = rep.recommended_next_step || {};
-      const html = [];
-      html.push('<div class="report-hero"><div class="kicker">RoofNow · Powered by New Standard Restoration</div>' +
+      const left = [], right = [], full = [];   // desktop two-column layout
+
+      // Header (full width, above the columns)
+      const hero = '<div class="report-hero"><div class="kicker">RoofNow · Powered by New Standard Restoration</div>' +
         "<h2>" + (firstName ? esc2(firstName) + ", your" : "Your") + " Roof Intelligence Report is Ready</h2>" +
-        "<p>" + esc2((rep.brand && rep.brand.subheadline) || "") + "</p></div>");
-      html.push('<div class="headline-range" style="margin-top:16px"><div class="label">Your estimated roof replacement</div>' +
+        "<p>" + esc2((rep.brand && rep.brand.subheadline) || "") + "</p></div>";
+
+      // LEFT: estimate range, snapshot, AI summary, reliability, why this estimate
+      left.push('<div class="headline-range"><div class="label">Your estimated roof replacement</div>' +
         '<div class="big">' + esc2(pr.display || "Estimate pending inspection") + "</div>" +
         '<div class="addr">' + esc2((rep.property && rep.property.address) || foundAddress || "") + "</div>" +
         '<div class="confline" style="margin-top:12px"><span class="conf-badge ' + confClass(c) + '">' +
         esc2((c.label || "Estimate Confidence") + ": " + (c.headline || "")) + "</span>" +
         '<span style="color:var(--muted);font-size:14px">Expected pricing accuracy ' + esc2(c.accuracy_text || "") + "</span></div></div>");
       const fin = rep.financing;
-      if (fin && fin.text) html.push('<div class="rsection" style="text-align:center"><h3 style="margin:0;color:var(--nsr-blue)">' + esc2(fin.text) + "</h3></div>");
+      if (fin && fin.text) left.push('<div class="rsection" style="text-align:center"><h3 style="margin:0;color:var(--nsr-blue)">' + esc2(fin.text) + "</h3></div>");
       const sa = rep.service_area;
-      if (sa && sa.in_area === false && sa.message) html.push('<div class="rsection"><p>' + esc2(sa.message) + "</p></div>");
+      if (sa && sa.in_area === false && sa.message) left.push('<div class="rsection"><p>' + esc2(sa.message) + "</p></div>");
       const cards = [];
       if (snap.total_sloped_sqft) cards.push(["~" + snap.total_sloped_sqft.toLocaleString() + " ft²", "Roof area"]);
       if (snap.total_squares) cards.push([Math.round(snap.total_squares) + " sq", "Roofing squares"]);
       if (snap.predominant_pitch) cards.push([snap.predominant_pitch, "Pitch"]);
       if (snap.structure_complexity) cards.push([snap.structure_complexity, "Complexity"]);
       if (snap.facet_count) cards.push([snap.facet_count, "Roof faces"]);
-      if (cards.length) html.push('<div class="rsection"><h3>Roof snapshot</h3><div class="meta-row">' +
+      if (cards.length) left.push('<div class="rsection"><h3>Roof snapshot</h3><div class="meta-row">' +
         cards.map(([v, l]) => '<div class="meta"><div class="v">' + esc2(v) + '</div><div class="l">' + esc2(l) + "</div></div>").join("") + "</div></div>");
-      if (sum.text) html.push('<div class="rsection"><h3>AI summary</h3><p class="ai-text">' + esc2(sum.text) + "</p></div>");
-      if (c.message) html.push('<div class="rsection"><h3>' + esc2(c.label || "Estimate Confidence") + " — " + esc2(c.level || "") + "</h3><p>" + esc2(c.message) + "</p></div>");
-      if (q.estimates && q.estimates.length) html.push('<div class="section-title">Your package options</div><div class="tiers">' +
+      if (sum.text) left.push('<div class="rsection"><h3>AI summary</h3><p class="ai-text">' + esc2(sum.text) + "</p></div>");
+      if (c.message) left.push('<div class="rsection"><h3>' + esc2(c.label || "Estimate Confidence") + " — " + esc2(c.level || "") + "</h3><p>" + esc2(c.message) + "</p></div>");
+      if (pe.drivers && pe.drivers.length) left.push('<div class="rsection"><h3>' + esc2(pe.headline || "Why this estimate?") + "</h3><p style=\"margin-bottom:10px\">" + esc2(pe.basis || "") + "</p>" +
+        pe.drivers.map((d) => '<div class="driver"><div class="dlabel">' + esc2(d.label) + '</div><div class="dval">' + esc2(d.value) + '</div><div class="dnote">' + esc2(d.note || "") + "</div></div>").join("") + "</div>");
+
+      // RIGHT: package options, then the inspection CTA card
+      if (q.estimates && q.estimates.length) right.push('<div><div class="section-title" style="margin-top:0">Your package options</div><div class="tiers">' +
         q.estimates.map((t) => { const f = t.key === "better"; return '<div class="tier' + (f ? " featured" : "") + '">' + (f ? '<span class="pop">Most popular</span>' : "") +
           "<h3>" + esc2(t.name) + "</h3><div class=\"blurb\">" + esc2(t.blurb) + "</div><div class=\"price\">" + esc2(t.price_display) + "</div>" +
           '<div class="persq">' + (t.price_per_square ? "~$" + t.price_per_square.toLocaleString() + " / square installed" : "") + "</div>" +
-          "<ul>" + (t.features || []).map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul></div>"; }).join("") + "</div>");
-      if (pe.drivers && pe.drivers.length) html.push('<div class="rsection"><h3>' + esc2(pe.headline || "Why this estimate?") + "</h3><p style=\"margin-bottom:10px\">" + esc2(pe.basis || "") + "</p>" +
-        pe.drivers.map((d) => '<div class="driver"><div class="dlabel">' + esc2(d.label) + '</div><div class="dval">' + esc2(d.value) + '</div><div class="dnote">' + esc2(d.note || "") + "</div></div>").join("") + "</div>");
-      html.push('<div class="rsection"><h3>' + esc2(rh.headline || "What we'll verify during your free roof assessment") + "</h3><p>" + esc2(rh.message || "") + "</p>" +
-        (rh.checklist ? '<ul class="checklist">' + rh.checklist.map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul>" : "") + "</div>");
-      html.push('<div class="rsection"><h3>' + esc2(se.headline || "Storm & damage review") + "</h3><p>" + esc2(se.message || "") + "</p></div>");
+          "<ul>" + (t.features || []).map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul></div>"; }).join("") + "</div></div>");
       const cta = nx.cta_label || "Schedule Free Roof Verification";
       const checklist = (nx.checklist || []).map((x) => '<div class="vcheck"><b>✓</b>' + esc2(x) + "</div>").join("");
       const btn = '<a class="btn" href="' + esc2(BOOKING_URL) + '" target="_blank" rel="noopener">' + esc2(cta) + "</a>";
-      html.push('<div class="verify"><h3>' + esc2(nx.headline || "Your estimate is ready") + "</h3><p>" + esc2(nx.body || "") + "</p>" +
+      right.push('<div class="verify">' + '<h3>' + esc2(nx.headline || "Your estimate is ready") + "</h3><p>" + esc2(nx.body || "") + "</p>" +
         (checklist ? '<div class="vchecklist">' + checklist + "</div>" : "") + btn +
         (nx.free_no_obligation ? '<p style="margin-top:12px;font-size:13px">' + esc2(nx.free_no_obligation) + "</p>" : "") + "</div>");
-      if (rep.disclaimer) html.push('<p class="disclaimer">' + esc2(rep.disclaimer) + "</p>");
-      $("report").innerHTML = html.join("");
+
+      // FULL WIDTH: verification details + storm review + disclaimer
+      full.push('<div class="rsection"><h3>' + esc2(rh.headline || "What we'll verify during your free roof assessment") + "</h3><p>" + esc2(rh.message || "") + "</p>" +
+        (rh.checklist ? '<ul class="checklist">' + rh.checklist.map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul>" : "") + "</div>");
+      full.push('<div class="rsection"><h3>' + esc2(se.headline || "Storm & damage review") + "</h3><p>" + esc2(se.message || "") + "</p></div>");
+      if (rep.disclaimer) full.push('<p class="disclaimer">' + esc2(rep.disclaimer) + "</p>");
+
+      $("report").innerHTML = hero +
+        '<div class="report-grid"><div class="report-left">' + left.join("") + "</div>" +
+        '<div class="report-right">' + right.join("") + "</div></div>" +
+        '<div class="report-full">' + full.join("") + "</div>";
     }
 
     // ---- wiring ----
