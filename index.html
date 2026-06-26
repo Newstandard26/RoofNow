@@ -91,6 +91,10 @@
     .trust .t span.sub { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
     @media (max-width: 640px) { .trust { grid-template-columns: 1fr; } .grid2 { grid-template-columns: 1fr; } }
 
+    .reviews { margin: 22px 0 8px; }
+    .reviews-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+    .reviews-card iframe { display: block; }
+
     #status { margin: 18px 0; color: var(--muted); display: none; }
     #status.show { display: flex; align-items: center; gap: 12px; }
     .spinner { width: 18px; height: 18px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
@@ -222,6 +226,15 @@
       <div class="t"><span class="ic">✓</span>Local verification by New Standard Restoration<span class="sub">Every estimate confirmed on-site</span></div>
       <div class="t"><span class="ic">✓</span>Licensed &amp; insured roofing professionals<span class="sub">Backed by NSR's crews &amp; warranty</span></div>
     </div>
+
+    <!-- Social proof: New Standard Restoration reviews -->
+    <section class="reviews">
+      <div class="section-title">What homeowners say about New Standard Restoration</div>
+      <div class="reviews-card">
+        <script type="text/javascript" src="https://reputationhub.site/reputation/assets/review-widget.js"></script>
+        <iframe class="lc_reviews_widget" src="https://reputationhub.site/reputation/widgets/review_widget/0Jspoo5ytvW4hlNpAbaV" frameborder="0" scrolling="no" style="min-width: 100%; width: 100%;"></iframe>
+      </div>
+    </section>
 
     <div id="status"><div class="spinner"></div><div id="statusText">Measuring your roof…</div></div>
 
