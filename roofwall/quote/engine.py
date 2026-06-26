@@ -36,6 +36,39 @@ DISCLAIMER = (
 )
 
 
+def build_preview(report: Dict[str, Any]) -> Dict[str, Any]:
+    """Address-only teaser: confirm we found the roof + a confidence read,
+    WITHOUT revealing Good/Better/Best pricing.
+
+    Drives step 1 of the landing page ("We found your roof" → confidence →
+    "Your estimate is ready"). Pricing stays gated behind the contact form
+    (:func:`build_quote`), so this deliberately omits estimates / price_range.
+    """
+    roof = report.get("roof") or {}
+    confidence = assess(report)
+    facet_count = int(roof.get("facet_count") or len(report.get("facets") or []))
+    found = report.get("mode") == "live" and facet_count > 0
+
+    return {
+        "brand": BRAND,
+        "powered_by": POWERED_BY,
+        "found": found,
+        "ready": True,
+        "address": report.get("address"),
+        "mode": report.get("mode"),
+        "imagery_date": report.get("imagery_date"),
+        "roof": {
+            "total_squares": roof.get("total_squares"),
+            "predominant_pitch": roof.get("predominant_pitch"),
+            "structure_complexity": roof.get("structure_complexity"),
+            "facet_count": facet_count,
+        },
+        "confidence": confidence.to_dict(),
+        "headline": "We found your roof" if found else "We located your property",
+        "next_step": "Enter your details to unlock your Good / Better / Best pricing.",
+    }
+
+
 def _order_squares(roof: Dict[str, Any]) -> float:
     """The waste-inclusive squares to install. Prefer ``order_squares``; fall
     back to total squares grossed up by the suggested waste factor."""

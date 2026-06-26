@@ -15,6 +15,7 @@ from roofwall.quote.engine import (
     BRAND,
     DISCLAIMER,
     POWERED_BY,
+    build_preview,
     build_quote,
 )
 from roofwall.quote.funnel import (
@@ -42,6 +43,7 @@ __all__ = [
     "assess",
     "Confidence",
     "build_quote",
+    "build_preview",
     "BRAND",
     "POWERED_BY",
     "DISCLAIMER",

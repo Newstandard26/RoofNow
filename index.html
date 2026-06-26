@@ -4,269 +4,350 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RoofNow — What's Your Roof Replacement Likely to Cost?</title>
-  <meta name="description" content="Get an instant roof replacement estimate. AI-powered aerial measurements, a real Good/Better/Best price range, and a free inspection. Powered by New Standard Restoration." />
+  <meta name="description" content="Enter your address and RoofNow will estimate your roof size, pitch, and replacement cost using aerial data, AI measurements, and local pricing. Powered by New Standard Restoration — licensed & insured roofing professionals." />
   <style>
     :root {
-      --bg: #0f1720; --panel: #16212e; --panel-2: #1b2937; --line: #233140;
-      --ink: #e7eef6; --muted: #9fb0c0; --accent: #ff7a3c; --accent-2: #4cc2ff; --ok: #34d399;
-      --warn: #fbbf24; --bad: #f87171;
+      /* NSR brand: charcoal / white / blue. No orange. */
+      --bg: #0e141b; --panel: #141d27; --panel-2: #18222e; --line: #25333f;
+      --ink: #eaf2f8; --muted: #91a4b4;
+      --accent: #51C5F4;        /* NSR blue */
+      --accent-deep: #2ba0e0;
+      --ok: #34d6b0; --warn: #e7b765; --bad: #e8746f;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: radial-gradient(1200px 600px at 70% -10%, #1b2a3a 0%, var(--bg) 55%);
+      background: radial-gradient(1100px 560px at 72% -12%, #15293a 0%, var(--bg) 55%);
       color: var(--ink); line-height: 1.6; -webkit-font-smoothing: antialiased; min-height: 100vh;
     }
-    .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
-    header { padding: 56px 0 8px; }
-    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 15px; color: var(--ink); letter-spacing: .2px; }
-    .brand .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(255,122,60,.15); }
-    h1 { font-size: clamp(30px, 5.5vw, 52px); line-height: 1.05; margin: 22px 0 12px; letter-spacing: -1px; }
-    h1 .grad { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-    .lede { font-size: clamp(16px, 2.4vw, 19px); color: var(--muted); max-width: 640px; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+    header { padding: 48px 0 6px; }
 
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin: 28px 0 8px; }
+    /* Brand lockup: RoofNow + Powered by NSR */
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand .dot { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 5px rgba(81,197,244,.16); }
+    .brand .name { font-size: 20px; font-weight: 800; letter-spacing: .2px; }
+    .brand .by { font-size: 12px; color: var(--muted); margin-top: -2px; }
+    .brand .by b { color: var(--accent); font-weight: 700; }
+
+    .badge-nsr { display: inline-flex; align-items: center; gap: 8px; margin-top: 26px;
+      font-size: 12.5px; font-weight: 700; color: var(--accent); letter-spacing: .3px;
+      background: rgba(81,197,244,.10); border: 1px solid rgba(81,197,244,.30);
+      padding: 6px 13px; border-radius: 999px; }
+    .badge-nsr .tick { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+    h1 { font-size: clamp(30px, 5.6vw, 52px); line-height: 1.04; margin: 16px 0 12px; letter-spacing: -1px; }
+    h1 .grad { background: linear-gradient(90deg, var(--accent), #bfe9fb); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lede { font-size: clamp(16px, 2.3vw, 19px); color: var(--muted); max-width: 680px; }
+
+    .tool { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px; margin: 26px 0 8px; }
+    .tool h2.step { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--accent); margin: 0 0 12px; font-weight: 700; }
     label { display: block; font-size: 12.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 0 0 6px; }
     .field { margin-bottom: 14px; }
     input[type="text"], input[type="email"], input[type="tel"] {
-      width: 100%; padding: 14px 16px; font-size: 16px; color: var(--ink);
-      background: #0b121a; border: 1px solid var(--line); border-radius: 11px; outline: none;
+      width: 100%; padding: 15px 16px; font-size: 16px; color: var(--ink);
+      background: #0b121a; border: 1px solid var(--line); border-radius: 12px; outline: none;
     }
-    input:focus { border-color: var(--accent-2); }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(81,197,244,.15); }
     input.bad { border-color: var(--bad); }
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     button {
-      padding: 15px 22px; font-size: 16px; font-weight: 700; color: #0b121a; cursor: pointer; width: 100%;
-      background: linear-gradient(90deg, var(--accent), #ff9a63); border: 0; border-radius: 11px;
+      padding: 16px 24px; font-size: 16px; font-weight: 800; color: #08151e; cursor: pointer; width: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-deep)); border: 0; border-radius: 12px;
+      letter-spacing: .2px;
     }
     button:disabled { opacity: .6; cursor: default; }
     .examples { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .examples span.lbl { font-size: 13px; color: var(--muted); }
-    .chip { font-size: 13px; color: var(--accent-2); background: rgba(76,194,255,.08); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; cursor: pointer; }
-    .chip:hover { background: rgba(76,194,255,.16); }
-
-    .step-note { font-size: 13.5px; color: var(--muted); margin: 2px 0 16px; }
-    .step-note b { color: var(--ink); }
-    .trust { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; color: var(--muted); font-size: 14px; }
-    .trust b { color: var(--ink); }
+    .examples .lbl { font-size: 13px; color: var(--muted); }
+    .chip { font-size: 13px; color: var(--accent); background: rgba(81,197,244,.08); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; cursor: pointer; }
+    .chip:hover { background: rgba(81,197,244,.16); }
     .err { color: var(--bad); font-size: 14px; margin-top: 10px; }
     .privacy { color: var(--muted); font-size: 12.5px; margin-top: 12px; }
+
+    /* Trust strip */
+    .trust { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0 4px; }
+    .trust .t { background: var(--panel-2); border: 1px solid var(--line); border-radius: 13px; padding: 14px 16px; font-size: 13.5px; color: var(--ink); }
+    .trust .t .ic { color: var(--accent); font-weight: 800; margin-right: 7px; }
+    .trust .t span.sub { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+    @media (max-width: 640px) { .trust { grid-template-columns: 1fr; } .grid2 { grid-template-columns: 1fr; } }
 
     #status { margin: 18px 0; color: var(--muted); display: none; }
     #status.show { display: flex; align-items: center; gap: 12px; }
     .spinner { width: 18px; height: 18px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    #result { display: none; margin: 8px 0 40px; }
+    /* Teaser (step 2) */
+    #teaser { display: none; margin: 18px 0 8px; }
+    #teaser.show { display: block; }
+    .teaser-card { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid rgba(81,197,244,.28); border-radius: 18px; padding: 24px; }
+    .teaser-card .found { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; }
+    .teaser-card .found .pin { color: var(--accent); }
+    .teaser-card .addr { color: var(--muted); font-size: 14px; margin: 4px 0 16px; }
+    .meta-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .meta { background: #0b121a; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+    .meta .v { font-size: 20px; font-weight: 800; }
+    .meta .l { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+    .confline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+    .conf-badge { font-weight: 800; font-size: 12.5px; padding: 5px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .4px; }
+    .conf-high { background: rgba(52,214,176,.16); color: var(--ok); }
+    .conf-medium { background: rgba(231,183,101,.16); color: var(--warn); }
+    .conf-low { background: rgba(232,116,111,.16); color: var(--bad); }
+    .ready { color: var(--accent); font-weight: 700; }
+    .unlock { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 18px; }
+    .unlock h3 { margin: 0 0 4px; font-size: 18px; }
+    .unlock p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+
+    /* Full quote (step 3) */
+    #result { display: none; margin: 8px 0 36px; }
     #result.show { display: block; }
-    .headline-range { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 26px; margin-bottom: 8px; }
+    .headline-range { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: 18px; padding: 26px; }
     .headline-range .label { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
     .headline-range .big { font-size: clamp(30px, 6vw, 46px); font-weight: 800; letter-spacing: -1px; margin-top: 4px; }
     .headline-range .addr { color: var(--muted); margin-top: 6px; font-size: 14px; }
-
-    .confidence { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; margin: 14px 0; }
-    .conf-badge { font-weight: 800; font-size: 13px; padding: 6px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .4px; }
-    .conf-high { background: rgba(52,211,153,.16); color: var(--ok); }
-    .conf-medium { background: rgba(251,191,36,.16); color: var(--warn); }
-    .conf-low { background: rgba(248,113,113,.16); color: var(--bad); }
-    .conf-meta { font-size: 14px; color: var(--muted); }
-    .conf-meta b { color: var(--ink); }
-    .notes { margin: 6px 0 0; font-size: 13.5px; }
+    .notes { margin: 12px 0 0; font-size: 13.5px; }
     .notes li { margin: 3px 0; }
     .notes .reason::marker { color: var(--ok); }
     .notes .warn::marker { color: var(--warn); }
-
-    .section-title { margin: 28px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .7px; color: var(--accent-2); font-weight: 700; }
+    .section-title { margin: 28px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .7px; color: var(--accent); font-weight: 700; }
     .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
     .tier { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; }
     .tier.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-    .tier .pop { align-self: flex-start; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--accent); background: rgba(255,122,60,.14); border-radius: 999px; padding: 3px 9px; margin-bottom: 8px; }
+    .tier .pop { align-self: flex-start; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--accent); background: rgba(81,197,244,.14); border-radius: 999px; padding: 3px 9px; margin-bottom: 8px; }
     .tier h3 { margin: 0 0 4px; font-size: 20px; }
     .tier .blurb { color: var(--muted); font-size: 13.5px; min-height: 38px; }
     .tier .price { font-size: 26px; font-weight: 800; letter-spacing: -.5px; margin: 12px 0 2px; }
     .tier .persq { color: var(--muted); font-size: 12.5px; }
     .tier ul { list-style: none; padding: 0; margin: 14px 0 0; font-size: 13.5px; }
     .tier ul li { padding: 5px 0 5px 22px; position: relative; color: var(--muted); }
-    .tier ul li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-weight: 800; }
-
+    .tier ul li::before { content: "✓"; position: absolute; left: 0; color: var(--accent); font-weight: 800; }
     .cta { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-top: 22px; }
     .cta h2 { margin: 0 0 6px; font-size: 20px; }
     .cta p { color: var(--muted); margin: 0; }
     .disclaimer { color: var(--muted); font-size: 12.5px; margin-top: 18px; }
-    footer { border-top: 1px solid var(--line); margin-top: 40px; padding: 26px 0 60px; color: var(--muted); font-size: 14px; }
+
+    footer { border-top: 1px solid var(--line); margin-top: 40px; padding: 26px 0 60px; color: var(--muted); font-size: 13.5px; }
     footer b { color: var(--ink); }
-    @media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
+    footer .blue { color: var(--accent); }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <div class="brand"><span class="dot"></span> RoofNow</div>
+      <div class="brand">
+        <span class="dot"></span>
+        <div>
+          <div class="name">RoofNow</div>
+          <div class="by">Powered by <b>New Standard Restoration</b></div>
+        </div>
+      </div>
+
+      <div class="badge-nsr"><span class="tick"></span> Powered by New Standard Restoration</div>
+
       <h1>What's Your Roof Replacement <span class="grad">Likely to Cost?</span></h1>
-      <p class="lede">Tell us where to send your estimate and we'll measure your roof from
-        aerial imagery — then show you an instant, honest Good / Better / Best price range.</p>
+      <p class="lede">Enter your address and RoofNow will estimate your roof size, pitch, and
+        replacement cost using aerial data, AI measurements, and local pricing.</p>
     </header>
 
-    <!-- Single gated intake form: the quote is revealed only after submit. -->
-    <div class="card" id="intakeCard">
-      <p class="step-note">Enter your details to unlock your <b>instant roof estimate</b>. A
-        free, no-obligation inspection from New Standard Restoration confirms the final price.</p>
-      <form id="intakeForm" novalidate>
-        <div class="grid2">
-          <div class="field">
-            <label for="firstName">First name</label>
-            <input id="firstName" type="text" autocomplete="given-name" />
-          </div>
-          <div class="field">
-            <label for="lastName">Last name</label>
-            <input id="lastName" type="text" autocomplete="family-name" />
-          </div>
-        </div>
+    <!-- STEP 1 — address only -->
+    <div class="tool" id="step1">
+      <h2 class="step">Step 1 · Your address</h2>
+      <form id="addressForm" novalidate>
         <div class="field">
-          <label for="address">Property address</label>
-          <input id="address" type="text" autocomplete="street-address" placeholder="123 Main St, City, ST" />
+          <input id="address" type="text" autocomplete="street-address" placeholder="Enter your property address" />
         </div>
-        <div class="grid2">
-          <div class="field">
-            <label for="phone">Phone</label>
-            <input id="phone" type="tel" autocomplete="tel" placeholder="(555) 123-4567" />
-          </div>
-          <div class="field">
-            <label for="email">Email</label>
-            <input id="email" type="email" autocomplete="email" placeholder="you@email.com" />
-          </div>
-        </div>
-        <button id="goBtn" type="submit">Show My Instant Estimate</button>
+        <button id="goBtn" type="submit">Get My Instant Roof Estimate</button>
       </form>
       <div class="examples">
-        <span class="lbl">Try an address:</span>
+        <span class="lbl">Try:</span>
+        <span class="chip" data-addr="4150 N Rockton Ave, Rockford, IL 61103">Rockford, IL</span>
         <span class="chip" data-addr="1600 Amphitheatre Parkway, Mountain View, CA">Mountain View, CA</span>
-        <span class="chip" data-addr="350 5th Ave, New York, NY">New York, NY</span>
       </div>
-      <div class="err" id="formErr"></div>
-      <div class="trust">
-        <div>✓ <b>AI aerial measurement</b></div>
-        <div>✓ <b>Real Good / Better / Best pricing</b></div>
-        <div>✓ <b>Free on-site inspection</b></div>
-      </div>
-      <p class="privacy">We use your details only to prepare your estimate and schedule your
-        inspection. No spam.</p>
+      <div class="err" id="addressErr"></div>
+    </div>
+
+    <!-- Trust strip -->
+    <div class="trust">
+      <div class="t"><span class="ic">✓</span>Powered by New Standard Restoration<span class="sub">A real, local roofing contractor</span></div>
+      <div class="t"><span class="ic">✓</span>Local verification by New Standard Restoration<span class="sub">Every estimate confirmed on-site</span></div>
+      <div class="t"><span class="ic">✓</span>Licensed &amp; insured roofing professionals<span class="sub">Backed by NSR's crews &amp; warranty</span></div>
     </div>
 
     <div id="status"><div class="spinner"></div><div id="statusText">Measuring your roof…</div></div>
 
+    <!-- STEP 2 — teaser + unlock form -->
+    <div id="teaser">
+      <div class="teaser-card">
+        <div class="found"><span class="pin">📍</span><span id="foundText">We found your roof</span></div>
+        <div class="addr" id="teaserAddr"></div>
+
+        <div class="meta-row" id="teaserMeta"></div>
+
+        <div class="confline">
+          <span class="conf-badge" id="teaserConf">—</span>
+          <span style="color:var(--muted);font-size:14px"><b id="teaserConfPct" style="color:var(--ink)">—</b> confidence</span>
+        </div>
+        <div class="ready">✓ Your estimate is ready.</div>
+
+        <div class="unlock">
+          <h3>Unlock your full estimate</h3>
+          <p>Enter your details and we'll reveal your Good / Better / Best replacement pricing.</p>
+          <form id="unlockForm" novalidate>
+            <div class="grid2">
+              <div class="field"><label for="firstName">First name</label><input id="firstName" type="text" autocomplete="given-name" /></div>
+              <div class="field"><label for="lastName">Last name</label><input id="lastName" type="text" autocomplete="family-name" /></div>
+            </div>
+            <div class="grid2">
+              <div class="field"><label for="phone">Phone</label><input id="phone" type="tel" autocomplete="tel" placeholder="(555) 123-4567" /></div>
+              <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" placeholder="you@email.com" /></div>
+            </div>
+            <button id="unlockBtn" type="submit">Reveal My Good / Better / Best Pricing</button>
+          </form>
+          <div class="err" id="unlockErr"></div>
+          <p class="privacy">We use your details only to prepare your estimate and schedule your inspection. No spam.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 — full quote -->
     <div id="result">
       <div class="headline-range">
         <div class="label">Your estimated roof replacement</div>
         <div class="big" id="rangeBig">—</div>
         <div class="addr" id="rangeAddr"></div>
+        <ul class="notes" id="confNotes"></ul>
       </div>
-
-      <div class="confidence">
-        <span class="conf-badge" id="confBadge">—</span>
-        <div class="conf-meta"><b id="confPct">—</b> confidence · price accuracy <b id="confMargin">—</b></div>
-      </div>
-      <ul class="notes" id="confNotes"></ul>
 
       <div class="section-title">Your package options</div>
       <div class="tiers" id="tiers"></div>
 
       <div class="cta">
         <h2 id="ctaMsg">You're all set.</h2>
-        <p>New Standard Restoration will reach out to schedule your free inspection and confirm
-          your exact price.</p>
+        <p>New Standard Restoration will verify your roof on-site and confirm your exact price — free, no obligation.</p>
       </div>
-
       <p class="disclaimer" id="disclaimer"></p>
     </div>
 
     <footer>
-      <div><b>RoofNow</b> — Powered by <b>New Standard Restoration</b>.</div>
-      <div style="margin-top:6px">Instant estimates are based on aerial measurements and are not a final contract price.</div>
+      <div><b class="blue">RoofNow</b> is powered by <b>New Standard Restoration</b>. Instant estimates are
+        budgetary and subject to field verification.</div>
     </footer>
   </div>
 
   <script>
     const $ = (id) => document.getElementById(id);
-    const fmtPct = (n) => (n == null ? "—" : n + "%");
     const show = (el) => el.classList.add("show");
     const hide = (el) => el.classList.remove("show");
+    const fmtPct = (n) => (n == null ? "—" : n + "%");
 
-    function clearBad() {
-      ["firstName", "lastName", "address", "phone", "email"].forEach((id) => $(id).classList.remove("bad"));
-    }
+    let foundAddress = null;   // normalized address from the preview (used for the lead)
 
-    function validateLocally() {
-      clearBad();
-      const errs = [];
-      const v = (id) => $(id).value.trim();
-      if (!v("firstName")) { errs.push("First name"); $("firstName").classList.add("bad"); }
-      if (!v("lastName")) { errs.push("Last name"); $("lastName").classList.add("bad"); }
-      if (!v("address")) { errs.push("Address"); $("address").classList.add("bad"); }
-      if (v("phone").replace(/\D/g, "").length < 10) { errs.push("Phone"); $("phone").classList.add("bad"); }
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v("email"))) { errs.push("Email"); $("email").classList.add("bad"); }
-      return errs;
-    }
-
-    async function submitIntake() {
-      const local = validateLocally();
-      if (local.length) {
-        $("formErr").textContent = "Please complete: " + local.join(", ") + ".";
-        return;
-      }
-      $("formErr").textContent = "";
+    // ---- Step 1: address -> preview ----
+    async function runPreview(address) {
+      $("addressErr").textContent = "";
       $("goBtn").disabled = true;
-      hide($("result"));
+      hide($("teaser")); hide($("result"));
       show($("status"));
-      $("statusText").textContent = "Measuring your roof and preparing your estimate…";
-
-      const body = {
-        first_name: $("firstName").value.trim(),
-        last_name: $("lastName").value.trim(),
-        address: $("address").value.trim(),
-        phone: $("phone").value.trim(),
-        email: $("email").value.trim(),
-      };
-
+      $("statusText").textContent = "Measuring your roof from aerial imagery…";
       try {
-        const r = await fetch("/api/lead", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const data = await r.json().catch(() => ({}));
+        const r = await fetch("/api/quote_preview?address=" + encodeURIComponent(address));
         if (!r.ok) {
-          $("formErr").textContent = (data.errors || [data.error || "Please check your details."]).join(" ");
-          return;
+          const e = await r.json().catch(() => ({}));
+          throw new Error(e.error || ("Request failed (" + r.status + ")"));
         }
-        if (data.quote) {
-          renderQuote(data.quote);
-          if (data.message) $("ctaMsg").textContent = "Thanks, " + body.first_name + "!";
-          hide($("status"));
-          show($("result"));
-          $("result").scrollIntoView({ behavior: "smooth", block: "start" });
-        } else {
-          $("statusText").textContent =
-            "Thanks! We couldn't auto-measure that roof, but New Standard Restoration will follow up with your estimate.";
-        }
+        renderTeaser(await r.json());
+        hide($("status"));
+        show($("teaser"));
+        $("teaser").scrollIntoView({ behavior: "smooth", block: "start" });
       } catch (err) {
-        $("statusText").textContent = "Something went wrong. Please try again.";
+        hide($("status"));
+        $("addressErr").textContent = "Sorry — we couldn't measure that address. " + err.message;
       } finally {
         $("goBtn").disabled = false;
       }
     }
 
+    function renderTeaser(p) {
+      foundAddress = p.address || $("address").value.trim();
+      $("foundText").textContent = p.headline || "We found your roof";
+      $("teaserAddr").textContent = foundAddress;
+
+      const meta = $("teaserMeta");
+      meta.innerHTML = "";
+      const facts = [];
+      const sq = p.roof && p.roof.total_squares;
+      if (sq) facts.push(["~" + Math.round(sq * 100).toLocaleString() + " ft²", "Roof area"]);
+      if (p.roof && p.roof.predominant_pitch) facts.push([p.roof.predominant_pitch, "Pitch"]);
+      if (p.roof && p.roof.structure_complexity) facts.push([p.roof.structure_complexity, "Complexity"]);
+      facts.forEach(([v, l]) => {
+        const d = document.createElement("div");
+        d.className = "meta";
+        d.innerHTML = '<div class="v">' + v + '</div><div class="l">' + l + "</div>";
+        meta.appendChild(d);
+      });
+
+      const c = p.confidence || {};
+      const b = $("teaserConf");
+      b.textContent = (c.band || "—") + " confidence";
+      b.className = "conf-badge conf-" + (c.band || "low");
+      $("teaserConfPct").textContent = fmtPct(c.confidence_pct);
+    }
+
+    // ---- Step 2: contact -> full quote (gated) ----
+    function validateUnlock() {
+      ["firstName", "lastName", "phone", "email"].forEach((id) => $(id).classList.remove("bad"));
+      const v = (id) => $(id).value.trim();
+      const errs = [];
+      if (!v("firstName")) { errs.push("First name"); $("firstName").classList.add("bad"); }
+      if (!v("lastName")) { errs.push("Last name"); $("lastName").classList.add("bad"); }
+      if (v("phone").replace(/\D/g, "").length < 10) { errs.push("Phone"); $("phone").classList.add("bad"); }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v("email"))) { errs.push("Email"); $("email").classList.add("bad"); }
+      return errs;
+    }
+
+    async function unlock() {
+      const local = validateUnlock();
+      if (local.length) { $("unlockErr").textContent = "Please complete: " + local.join(", ") + "."; return; }
+      $("unlockErr").textContent = "";
+      $("unlockBtn").disabled = true;
+      show($("status"));
+      $("statusText").textContent = "Calculating your Good / Better / Best pricing…";
+
+      const body = {
+        first_name: $("firstName").value.trim(),
+        last_name: $("lastName").value.trim(),
+        phone: $("phone").value.trim(),
+        email: $("email").value.trim(),
+        address: foundAddress || $("address").value.trim(),
+      };
+      try {
+        const r = await fetch("/api/lead", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) { $("unlockErr").textContent = (data.errors || [data.error || "Please check your details."]).join(" "); return; }
+        hide($("status"));
+        if (data.quote) {
+          renderQuote(data.quote);
+          $("ctaMsg").textContent = "Thanks, " + body.first_name + "!";
+          hide($("teaser")); show($("result"));
+          $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+        } else {
+          $("statusText").textContent = "Thanks! New Standard Restoration will follow up with your estimate.";
+          show($("status"));
+        }
+      } catch (err) {
+        hide($("status"));
+        $("unlockErr").textContent = "Something went wrong. Please try again.";
+      } finally {
+        $("unlockBtn").disabled = false;
+      }
+    }
+
     function renderQuote(q) {
       $("rangeBig").textContent = (q.price_range && q.price_range.display) || "Estimate pending inspection";
-      $("rangeAddr").textContent = q.address || "";
+      $("rangeAddr").textContent = q.address || foundAddress || "";
 
       const c = q.confidence || {};
-      const badge = $("confBadge");
-      badge.textContent = (c.band || "—") + " confidence";
-      badge.className = "conf-badge conf-" + (c.band || "low");
-      $("confPct").textContent = fmtPct(c.confidence_pct);
-      $("confMargin").textContent = c.margin_of_error_pct != null ? ("±" + c.margin_of_error_pct + "%") : "—";
-
       const notes = $("confNotes");
       notes.innerHTML = "";
       (c.reasons || []).forEach((t) => { const li = document.createElement("li"); li.className = "reason"; li.textContent = t; notes.appendChild(li); });
@@ -287,13 +368,14 @@
           "<ul>" + (t.features || []).map((f) => "<li>" + f + "</li>").join("") + "</ul>";
         tiers.appendChild(div);
       });
-
       $("disclaimer").textContent = q.disclaimer || "";
     }
 
-    $("intakeForm").addEventListener("submit", (e) => { e.preventDefault(); submitIntake(); });
+    // ---- wiring ----
+    $("addressForm").addEventListener("submit", (e) => { e.preventDefault(); const a = $("address").value.trim(); if (a) runPreview(a); });
+    $("unlockForm").addEventListener("submit", (e) => { e.preventDefault(); unlock(); });
     document.querySelectorAll(".chip").forEach((c) =>
-      c.addEventListener("click", () => { $("address").value = c.dataset.addr; $("address").classList.remove("bad"); })
+      c.addEventListener("click", () => { $("address").value = c.dataset.addr; runPreview(c.dataset.addr); })
     );
   </script>
 </body>

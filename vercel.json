@@ -8,6 +8,7 @@
     "api/facets.py": { "includeFiles": "roofwall/**" },
     "api/suggest.py": { "includeFiles": "roofwall/**" },
     "api/config.py": { "includeFiles": "roofwall/**" },
+    "api/quote_preview.py": { "includeFiles": "roofwall/**" },
     "api/lead.py": { "includeFiles": "roofwall/**" }
   },
   "redirects": [
