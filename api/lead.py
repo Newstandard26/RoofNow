@@ -22,8 +22,7 @@ from http.server import BaseHTTPRequestHandler
 # Make the repo-root `roofwall` package importable from /api.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir))
 
-from roofwall.app import measure_address  # noqa: E402
-from roofwall.quote import build_quote  # noqa: E402
+from roofwall.property_report import build_property_report  # noqa: E402
 from roofwall.quote.funnel import funnel_lead  # noqa: E402
 from roofwall.quote.lead import validate_lead  # noqa: E402
 from roofwall.ratelimit import FixedWindowRateLimiter  # noqa: E402
@@ -46,15 +45,12 @@ def _to_float(v):
         return None
 
 
-def _quote_for(address, lat=None, lng=None):
-    """Measure + quote for an address. Prefers exact lat/lng (from address
-    autocomplete) for accuracy. Never raises -> returns None on failure."""
-    try:
-        report = measure_address(address=address, lat=lat, lng=lng)
-        return build_quote(report)
-    except Exception as exc:  # noqa: BLE001
-        print(f"[lead] quote failed for {address!r}: {exc}", file=sys.stderr)
+def _funnel_quote(report):
+    """A small quote-shaped dict for the lead funnel (price range + confidence)."""
+    if not report:
         return None
+    q = report.get("quote") or {}
+    return {"price_range": q.get("price_range"), "confidence": report.get("confidence")}
 
 
 class handler(BaseHTTPRequestHandler):
@@ -102,21 +98,26 @@ class handler(BaseHTTPRequestHandler):
             self._send(400, {"error": "Validation failed.", "errors": errors})
             return
 
-        # Build the quote (so the funnel notification carries the estimate), then
-        # funnel the lead, then return the quote to the browser. Prefer the exact
-        # lat/lng from address autocomplete when the form provided it.
-        quote = _quote_for(lead["address"], _to_float(payload.get("lat")), _to_float(payload.get("lng")))
-        if quote and not lead.get("estimate_low"):
-            pr = quote.get("price_range") or {}
-            lead["estimate_low"] = pr.get("low")
-            lead["estimate_high"] = pr.get("high")
+        # Build the full Property Intelligence Report (reuses measurement + quote
+        # in one pass) so the browser gets the report and the funnel carries the
+        # estimate. Prefer the exact lat/lng from address autocomplete.
+        report = build_property_report(
+            lead["address"],
+            lat=_to_float(payload.get("lat")),
+            lng=_to_float(payload.get("lng")),
+            lead=lead,
+        )
+        fq = _funnel_quote(report)
+        if fq and fq.get("price_range") and not lead.get("estimate_low"):
+            lead["estimate_low"] = fq["price_range"].get("low")
+            lead["estimate_high"] = fq["price_range"].get("high")
 
         print(f"[lead] {json.dumps(lead)}")
-        funnel_lead(lead, quote)
+        funnel_lead(lead, fq)
 
         self._send(200, {
             "ok": True,
             "message": "Thanks! New Standard Restoration will reach out to "
                        "schedule your free inspection.",
-            "quote": quote,
+            "report": report,
         })
