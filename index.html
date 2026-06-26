@@ -51,6 +51,26 @@
     input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(81,197,244,.15); }
     input.bad { border-color: var(--bad); }
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    /* Address autocomplete */
+    .addr-wrap { position: relative; }
+    .suggest { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30;
+      background: #0b121a; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: none; }
+    .suggest.show { display: block; }
+    .suggest-item { padding: 12px 16px; font-size: 15px; cursor: pointer; border-bottom: 1px solid var(--line); }
+    .suggest-item:last-child { border-bottom: 0; }
+    .suggest-item:hover { background: rgba(81,197,244,.10); }
+    .addr-verified { display: none; align-items: center; gap: 7px; margin-top: 8px; font-size: 13px; color: var(--ok); }
+    .addr-verified.show { display: flex; }
+    /* Google Places dropdown — dark theme */
+    .pac-container { background: #0b121a; border: 1px solid var(--line); border-radius: 12px; margin-top: 6px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.45); font-family: inherit; }
+    .pac-item { padding: 10px 14px; color: var(--muted); border-top: 1px solid var(--line); cursor: pointer; }
+    .pac-item:first-child { border-top: 0; }
+    .pac-item:hover, .pac-item-selected { background: rgba(81,197,244,.10); }
+    .pac-item-query { color: var(--ink); font-size: 15px; }
+    .pac-matched { color: var(--accent); }
+    .pac-icon { display: none; }
     button {
       padding: 16px 24px; font-size: 16px; font-weight: 800; color: #08151e; cursor: pointer; width: 100%;
       background: linear-gradient(90deg, var(--accent), var(--accent-deep)); border: 0; border-radius: 12px;
@@ -151,11 +171,14 @@
     <!-- STEP 1 — address only -->
     <div class="tool" id="step1">
       <h2 class="step">Step 1 · Your address</h2>
-      <form id="addressForm" novalidate>
-        <div class="field">
-          <input id="address" type="text" autocomplete="street-address" placeholder="Enter your property address" />
+      <form id="addressForm" novalidate autocomplete="off">
+        <div class="field addr-wrap">
+          <input id="address" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="Start typing your property address…" />
+          <div class="suggest" id="suggest" role="listbox"></div>
         </div>
-        <button id="goBtn" type="submit">Get My Instant Roof Estimate</button>
+        <div class="addr-verified" id="addrVerified">✓ Address verified — <span id="addrVerifiedText"></span></div>
+        <button id="goBtn" type="submit" style="margin-top:14px">Get My Instant Roof Estimate</button>
       </form>
       <div class="examples">
         <span class="lbl">Try:</span>
@@ -240,16 +263,23 @@
     const fmtPct = (n) => (n == null ? "—" : n + "%");
 
     let foundAddress = null;   // normalized address from the preview (used for the lead)
+    let selectedLoc = null;    // {lat, lng, description} once an autocomplete suggestion is picked
 
     // ---- Step 1: address -> preview ----
-    async function runPreview(address) {
+    async function runPreview() {
+      const address = $("address").value.trim();
+      if (!address) { $("address").focus(); return; }
       $("addressErr").textContent = "";
       $("goBtn").disabled = true;
       hide($("teaser")); hide($("result"));
       show($("status"));
       $("statusText").textContent = "Measuring your roof from aerial imagery…";
       try {
-        const r = await fetch("/api/quote_preview?address=" + encodeURIComponent(address));
+        // Prefer the exact lat/lng from the picked address — most accurate.
+        const url = selectedLoc
+          ? `/api/quote_preview?lat=${selectedLoc.lat}&lng=${selectedLoc.lng}&address=${encodeURIComponent(selectedLoc.description || address)}`
+          : "/api/quote_preview?address=" + encodeURIComponent(address);
+        const r = await fetch(url);
         if (!r.ok) {
           const e = await r.json().catch(() => ({}));
           throw new Error(e.error || ("Request failed (" + r.status + ")"));
@@ -317,7 +347,9 @@
         last_name: $("lastName").value.trim(),
         phone: $("phone").value.trim(),
         email: $("email").value.trim(),
-        address: foundAddress || $("address").value.trim(),
+        address: foundAddress || (selectedLoc && selectedLoc.description) || $("address").value.trim(),
+        lat: selectedLoc ? selectedLoc.lat : undefined,
+        lng: selectedLoc ? selectedLoc.lng : undefined,
       };
       try {
         const r = await fetch("/api/lead", {
@@ -372,11 +404,103 @@
     }
 
     // ---- wiring ----
-    $("addressForm").addEventListener("submit", (e) => { e.preventDefault(); const a = $("address").value.trim(); if (a) runPreview(a); });
+    $("addressForm").addEventListener("submit", (e) => { e.preventDefault(); runPreview(); });
     $("unlockForm").addEventListener("submit", (e) => { e.preventDefault(); unlock(); });
     document.querySelectorAll(".chip").forEach((c) =>
-      c.addEventListener("click", () => { $("address").value = c.dataset.addr; runPreview(c.dataset.addr); })
+      c.addEventListener("click", () => { setAddress(c.dataset.addr, null); runPreview(); })
     );
+
+    // ---------- Address autocomplete: Google Places (server-suggest fallback) ----------
+    const addr = $("address");
+    const suggestBox = $("suggest");
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
+    // Continental US (lower-48) — bias + restrict suggestions.
+    const CONUS = { south: 24.396, west: -125.0, north: 49.384, east: -66.93 };
+    let mapsReady = false, fallbackSuggest = false, suggestTimer = null;
+
+    function setAddress(text, loc) {
+      addr.value = text || "";
+      selectedLoc = loc;
+      const v = $("addrVerified");
+      if (loc) { $("addrVerifiedText").textContent = text; v.classList.add("show"); }
+      else { v.classList.remove("show"); }
+    }
+
+    // Load the browser Maps key from the server, then Google Maps JS (Places).
+    (async () => {
+      try {
+        const cfg = await (await fetch("/api/config")).json();
+        if (cfg && cfg.maps_browser_key) loadGoogleMaps(cfg.maps_browser_key);
+        else fallbackSuggest = true;
+      } catch { fallbackSuggest = true; }
+    })();
+
+    function loadGoogleMaps(key) {
+      window.__initPlaces = initPlaces;
+      const s = document.createElement("script");
+      s.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key)
+        + "&libraries=places&loading=async&region=US&callback=__initPlaces";
+      s.async = true; s.onerror = () => { fallbackSuggest = true; };
+      document.head.appendChild(s);
+    }
+
+    function initPlaces() {
+      mapsReady = true;
+      const bounds = new google.maps.LatLngBounds(
+        new google.maps.LatLng(CONUS.south, CONUS.west),
+        new google.maps.LatLng(CONUS.north, CONUS.east));
+      const ac = new google.maps.places.Autocomplete(addr, {
+        fields: ["geometry", "formatted_address", "address_components"],
+        componentRestrictions: { country: "us" },
+        bounds, strictBounds: true,
+        types: ["address"],
+      });
+      ac.addListener("place_changed", () => {
+        const p = ac.getPlace();
+        if (!p || !p.geometry || !p.geometry.location) return;   // require a real, full address pick
+        const lat = p.geometry.location.lat(), lng = p.geometry.location.lng();
+        setAddress(p.formatted_address || addr.value.trim(),
+                   { lat, lng, description: p.formatted_address || addr.value.trim() });
+      });
+    }
+
+    // Editing the field invalidates any prior pick.
+    addr.addEventListener("input", () => {
+      if (selectedLoc) setAddress(addr.value, null);
+      if (mapsReady || !fallbackSuggest) return;       // Google Places handles type-ahead
+      const q = addr.value.trim();
+      clearTimeout(suggestTimer);
+      if (q.length < 3) { hideSuggest(); return; }
+      suggestTimer = setTimeout(() => fetchSuggest(q), 300);
+    });
+    addr.addEventListener("keydown", (e) => {
+      if (mapsReady || !fallbackSuggest) return;
+      if (e.key === "Enter" && suggestBox.classList.contains("show") && suggestBox.firstElementChild) {
+        e.preventDefault(); suggestBox.firstElementChild.click();
+      } else if (e.key === "Escape") { hideSuggest(); }
+    });
+    document.addEventListener("click", (e) => {
+      if (e.target !== addr && !suggestBox.contains(e.target)) hideSuggest();
+    });
+
+    async function fetchSuggest(q) {
+      try {
+        const data = await (await fetch("/api/suggest?q=" + encodeURIComponent(q))).json();
+        renderSuggest(data.suggestions || []);
+      } catch { hideSuggest(); }
+    }
+    function renderSuggest(items) {
+      if (!items.length) { hideSuggest(); return; }
+      suggestBox.innerHTML = items.map((s) =>
+        `<div class="suggest-item" role="option">${esc(s.description)}</div>`).join("");
+      [...suggestBox.children].forEach((el, i) =>
+        el.addEventListener("click", () => {
+          setAddress(items[i].description, { lat: items[i].lat, lng: items[i].lng, description: items[i].description });
+          hideSuggest();
+        }));
+      suggestBox.classList.add("show");
+    }
+    function hideSuggest() { suggestBox.classList.remove("show"); suggestBox.innerHTML = ""; }
   </script>
 </body>
 </html>
