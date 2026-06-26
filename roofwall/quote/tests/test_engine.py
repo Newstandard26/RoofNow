@@ -1,7 +1,7 @@
 """Instant-quote engine — measurement report -> consumer quote dict."""
 import pytest
 
-from roofwall.quote.engine import BRAND, POWERED_BY, build_quote
+from roofwall.quote.engine import BRAND, POWERED_BY, build_preview, build_quote
 
 
 def _live_report():
@@ -63,6 +63,30 @@ def test_order_squares_falls_back_to_waste_grossup():
     # 24 squares * 1.21 waste ~= 29.04
     assert q["measurement"]["order_squares"] == pytest.approx(29.04, abs=0.1)
     assert q["price_range"]["low"] > 0
+
+
+def test_preview_has_confidence_but_no_prices():
+    p = build_preview(_live_report())
+    assert p["brand"] == BRAND and p["powered_by"] == POWERED_BY
+    assert p["found"] is True
+    assert p["ready"] is True
+    assert p["headline"] == "We found your roof"
+    assert p["confidence"]["band"] == "high"
+    assert p["roof"]["total_squares"] == 24.0
+    # pricing stays gated — no Good/Better/Best leaks into the teaser
+    assert "estimates" not in p
+    assert "price_range" not in p
+
+
+def test_preview_demo_not_found_but_ready():
+    report = _live_report()
+    report["mode"] = "demo"
+    report["demo_reason"] = "no_api_key"
+    p = build_preview(report)
+    assert p["found"] is False
+    assert p["ready"] is True
+    assert p["headline"] == "We located your property"
+    assert "estimates" not in p
 
 
 def test_demo_report_still_quotes_but_low_confidence():
