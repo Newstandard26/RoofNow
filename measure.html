@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RoofNow — Roof &amp; Wall Measurement</title>
+  <meta name="description" content="Type a property address and get a contractor-grade roof and wall measurement report — areas, pitch, squares, ridge/hip/valley lengths, wall area and openings." />
+  <style>
+    :root {
+      --bg: #0f1720; --panel: #16212e; --panel-2: #1b2937; --line: #233140;
+      --ink: #e7eef6; --muted: #9fb0c0; --accent: #ff7a3c; --accent-2: #4cc2ff; --ok: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 70% -10%, #1b2a3a 0%, var(--bg) 55%);
+      color: var(--ink); line-height: 1.6; -webkit-font-smoothing: antialiased; min-height: 100vh;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+    header { padding: 64px 0 8px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+    .brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(255,122,60,.15); }
+    h1 { font-size: clamp(30px, 5.5vw, 50px); line-height: 1.05; margin: 18px 0 10px; letter-spacing: -1px; }
+    h1 .grad { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lede { font-size: clamp(16px, 2.4vw, 19px); color: var(--muted); max-width: 620px; }
+
+    .tool { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin: 28px 0 8px; }
+    form { display: flex; gap: 10px; flex-wrap: wrap; }
+    input[type="text"] {
+      flex: 1 1 340px; min-width: 0; padding: 14px 16px; font-size: 16px; color: var(--ink);
+      background: #0b121a; border: 1px solid var(--line); border-radius: 11px; outline: none;
+    }
+    input[type="text"]:focus { border-color: var(--accent-2); }
+    button {
+      padding: 14px 22px; font-size: 16px; font-weight: 700; color: #0b121a; cursor: pointer;
+      background: linear-gradient(90deg, var(--accent), #ff9a63); border: 0; border-radius: 11px; white-space: nowrap;
+    }
+    button:disabled { opacity: .6; cursor: default; }
+    .examples { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .examples span { font-size: 13px; color: var(--muted); }
+    .chip { font-size: 13px; color: var(--accent-2); background: rgba(76,194,255,.08); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; cursor: pointer; }
+    .chip:hover { background: rgba(76,194,255,.16); }
+
+    .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+    .badge.demo { background: rgba(255,122,60,.16); color: var(--accent); }
+    .badge.live { background: rgba(52,211,153,.16); color: var(--ok); }
+
+    #result { margin: 18px 0 10px; display: none; }
+    #result.show { display: block; }
+    .rhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .rhead h2 { font-size: 19px; margin: 0; }
+    .rhead .sub { color: var(--muted); font-size: 14px; }
+
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .stat { background: var(--panel-2); border: 1px solid var(--line); border-radius: 13px; padding: 16px 18px; }
+    .stat .v { font-size: 26px; font-weight: 800; letter-spacing: -.5px; }
+    .stat .l { font-size: 12.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .stat .v small { font-size: 14px; color: var(--muted); font-weight: 600; }
+
+    .section-title { margin: 28px 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .7px; color: var(--accent-2); font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
+    th, td { text-align: right; padding: 11px 14px; font-size: 14px; border-top: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 12.5px; text-transform: uppercase; letter-spacing: .4px; border-top: 0; background: var(--panel-2); }
+    th:first-child, td:first-child { text-align: left; }
+    .facing { display: inline-block; min-width: 26px; padding: 2px 7px; border-radius: 6px; background: rgba(76,194,255,.1); color: var(--accent-2); font-weight: 700; font-size: 12px; }
+
+    .walls { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; }
+    @media (max-width: 640px) { .walls { grid-template-columns: 1fr; } }
+    .wallcard { background: var(--panel); border: 1px solid var(--line); border-radius: 13px; padding: 18px; }
+    .bar { display: grid; grid-template-columns: 28px 1fr 64px; align-items: center; gap: 10px; margin: 9px 0; }
+    .bar .d { color: var(--muted); font-weight: 700; font-size: 13px; }
+    .bar .track { background: #0b121a; border-radius: 7px; height: 12px; overflow: hidden; }
+    .bar .fill { height: 100%; background: linear-gradient(90deg, var(--accent-2), #6fd3ff); border-radius: 7px; }
+    .bar .n { text-align: right; font-size: 13px; color: var(--ink); }
+    .kv { display: flex; justify-content: space-between; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+    .kv:first-child { border-top: 0; }
+    .kv span:first-child { color: var(--muted); }
+    .kv b { font-weight: 700; }
+
+    .note { font-size: 13px; color: var(--muted); margin-top: 12px; }
+    .err { color: #ff9a9a; background: rgba(255,90,90,.08); border: 1px solid rgba(255,90,90,.25); border-radius: 11px; padding: 12px 14px; margin-top: 14px; display: none; }
+    .err.show { display: block; }
+    .spinner { width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,.35); border-top-color: #0b121a; border-radius: 50%; display: inline-block; vertical-align: -3px; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    footer { color: var(--muted); font-size: 13px; padding: 34px 0 56px; border-top: 1px solid var(--line); margin-top: 36px; }
+    a { color: var(--accent-2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* address type-ahead + verify map */
+    .field { position: relative; flex: 1 1 340px; min-width: 0; }
+    .field input[type="text"] { width: 100%; }
+    .suggest { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 40;
+      background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px; overflow: hidden; display: none;
+      box-shadow: 0 12px 30px rgba(0,0,0,.35); }
+    .suggest.show { display: block; }
+    .suggest-item { padding: 11px 14px; font-size: 14px; color: var(--ink); cursor: pointer; border-top: 1px solid var(--line); }
+    .suggest-item:first-child { border-top: 0; }
+    .suggest-item:hover, .suggest-item.active { background: rgba(76,194,255,.14); }
+    .verify { margin-top: 16px; display: none; }
+    .verify.show { display: block; }
+    .map { height: 320px; border-radius: 13px; overflow: hidden; border: 1px solid var(--line); }
+    .maphint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+    /* Roof diagram */
+    .diagram-box { background: var(--panel); border: 1px solid var(--line); border-radius: 13px; padding: 14px; }
+    #diagram { width: 100%; height: auto; display: block; background: #0b121a; border-radius: 10px; }
+    .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--muted); }
+    .legend .lg { display: inline-flex; align-items: center; gap: 5px; }
+    .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+    /* Google Places Autocomplete dropdown (dark theme) */
+    .pac-container { background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px;
+      margin-top: 6px; box-shadow: 0 12px 30px rgba(0,0,0,.35); font-family: inherit; z-index: 50; }
+    .pac-item { padding: 9px 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13.5px; cursor: pointer; }
+    .pac-item:hover, .pac-item-selected { background: rgba(76,194,255,.14); }
+    .pac-item-query { color: var(--ink); font-size: 14px; }
+    .pac-matched { color: var(--accent-2); }
+    .pac-icon { display: none; }
+    .pac-logo:after { margin: 6px 12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <span class="brand"><span class="dot"></span> RoofNow · New Standard Restoration</span>
+      <h1>Address in,<br /><span class="grad">measurement report out.</span></h1>
+      <p class="lede">Type a property address for a contractor-grade roof &amp; wall report —
+      per-facet area, pitch, squares, and a North/South/East/West wall breakdown with openings.</p>
+    </header>
+
+    <div class="tool">
+      <form id="form" autocomplete="off">
+        <div class="field">
+          <input id="address" type="text" autocomplete="off" spellcheck="false"
+            placeholder="Start typing a property address…" aria-label="Property address" />
+          <div id="suggest" class="suggest" role="listbox"></div>
+        </div>
+        <button id="go" type="submit">Measure roof</button>
+      </form>
+      <div class="examples">
+        <span>Try:</span>
+        <span class="chip" data-a="1600 Pennsylvania Ave NW, Washington DC">1600 Pennsylvania Ave NW</span>
+        <span class="chip" data-a="350 5th Ave, New York NY">350 5th Ave, New York</span>
+        <span class="chip" data-a="1 Infinite Loop, Cupertino CA">1 Infinite Loop, Cupertino</span>
+      </div>
+      <div id="verify" class="verify">
+        <div id="map" class="map"></div>
+        <div class="maphint">Drag the pin onto your building to confirm it's the right structure, then <b>Measure roof</b>.</div>
+      </div>
+      <div id="err" class="err"></div>
+    </div>
+
+    <section id="result">
+      <div class="rhead">
+        <h2 id="r-address">—</h2>
+        <span id="r-badge" class="badge demo">Demo data</span>
+        <span id="r-arch" class="sub"></span>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="section-title">Roof facets</div>
+      <table>
+        <thead><tr><th>Facet</th><th>Pitch</th><th>Facing</th><th>Sloped ft²</th><th>Squares</th></tr></thead>
+        <tbody id="facets"></tbody>
+      </table>
+
+      <div id="diagram-wrap">
+        <div class="section-title">Roof diagram</div>
+        <div class="diagram-box">
+          <svg id="diagram" viewBox="0 0 480 360" preserveAspectRatio="xMidYMid meet" aria-label="Roof facet diagram"></svg>
+          <div id="diagram-legend" class="legend"></div>
+        </div>
+      </div>
+
+      <div id="ll-wrap">
+        <div class="section-title">Length diagram</div>
+        <table>
+          <thead><tr><th>Line type</th><th>Count</th><th>Length (ft)</th></tr></thead>
+          <tbody id="lines"></tbody>
+        </table>
+      </div>
+
+      <div id="pitch-wrap">
+        <div class="section-title">Areas per pitch</div>
+        <table>
+          <thead><tr><th>Pitch</th><th>Area (ft²)</th><th>% of roof</th></tr></thead>
+          <tbody id="pitches"></tbody>
+        </table>
+      </div>
+
+      <div id="waste-wrap">
+        <div class="section-title">Waste factor <span id="complexity" class="sub"></span></div>
+        <table>
+          <thead><tr><th>Waste %</th><th>Area (ft²)</th><th>Squares to order</th></tr></thead>
+          <tbody id="waste"></tbody>
+        </table>
+      </div>
+
+      <div class="section-title">Walls</div>
+      <div class="walls">
+        <div class="wallcard">
+          <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">Gross area by elevation</div>
+          <div id="wallbars"></div>
+        </div>
+        <div class="wallcard" id="wallkv"></div>
+      </div>
+
+      <p id="r-note" class="note"></p>
+    </section>
+
+    <footer>
+      RoofNow — internal tooling for New Standard Restoration. Reports are produced by the
+      <code>roofwall</code> measurement engine. Live roof data comes from Google Solar
+      (server-side); demo mode uses representative sample roofs. &copy; 2026.
+    </footer>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const form = $("form"), addr = $("address"), go = $("go");
+    const result = $("result"), errBox = $("err");
+    const fmt = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    const fmt2 = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+    let selectedLoc = null;  // {lat, lng, description} once a suggestion/pin is confirmed
+
+    async function runMeasure() {
+      const value = addr.value.trim();
+      if (!value && !selectedLoc) { addr.focus(); return; }
+      hideSuggest();
+      errBox.classList.remove("show");
+      go.disabled = true;
+      const label = go.textContent; go.innerHTML = '<span class="spinner"></span>';
+      try {
+        const url = selectedLoc
+          ? `/api/measure?lat=${selectedLoc.lat}&lng=${selectedLoc.lng}&address=${encodeURIComponent(selectedLoc.description || value)}`
+          : "/api/measure?address=" + encodeURIComponent(value);
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        render(data);
+        if (data.mode === "live" && typeof data.lat === "number")
+          enhanceGeometry(data.lat, data.lng);
+      } catch (ex) {
+        errBox.textContent = "Could not measure that address: " + ex.message;
+        errBox.classList.add("show");
+        result.classList.remove("show");
+      } finally {
+        go.disabled = false; go.textContent = label;
+      }
+    }
+
+    // Enter submits the form; clicking the button fires click. Handle BOTH
+    // explicitly through the same path, each cancelling the native submit so
+    // the page can never navigate/clear the input.
+    form.addEventListener("submit", (e) => { e.preventDefault(); runMeasure(); });
+    go.addEventListener("click", (e) => { e.preventDefault(); runMeasure(); });
+
+    document.querySelectorAll(".chip").forEach((c) =>
+      c.addEventListener("click", () => { addr.value = c.dataset.a; selectedLoc = null; runMeasure(); })
+    );
+
+    // ---------- Google Maps + Places Autocomplete (server-suggest fallback) ----------
+    const suggestBox = $("suggest");
+    let suggestTimer = null, fallbackSuggest = false;
+    let mapsReady = false, gmap = null, gmarker = null, autocomplete = null;
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
+
+    // Continental US (lower-48) — biases + restricts Places and the map.
+    const CONUS = { south: 24.396, west: -125.0, north: 49.384, east: -66.93 };
+
+    // Load the *browser* Maps key from the server, then Google Maps JS.
+    (async () => {
+      try {
+        const cfg = await (await fetch("/api/config")).json();
+        if (cfg && cfg.maps_browser_key) loadGoogleMaps(cfg.maps_browser_key);
+        else enableFallback();
+      } catch { enableFallback(); }
+    })();
+
+    function loadGoogleMaps(key) {
+      window.__initMaps = initMaps;
+      const s = document.createElement("script");
+      s.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key)
+        + "&libraries=places&loading=async&region=US&callback=__initMaps";
+      s.async = true; s.onerror = enableFallback;
+      document.head.appendChild(s);
+    }
+
+    function initMaps() {
+      mapsReady = true;
+      const bounds = new google.maps.LatLngBounds(
+        new google.maps.LatLng(CONUS.south, CONUS.west),
+        new google.maps.LatLng(CONUS.north, CONUS.east));
+      autocomplete = new google.maps.places.Autocomplete(addr, {
+        fields: ["geometry", "formatted_address"],
+        componentRestrictions: { country: "us" },
+        bounds, strictBounds: true,           // continental US only
+        types: ["address"],
+      });
+      autocomplete.addListener("place_changed", () => {
+        const p = autocomplete.getPlace();
+        if (!p || !p.geometry || !p.geometry.location) return;
+        const lat = p.geometry.location.lat(), lng = p.geometry.location.lng();
+        selectedLoc = { lat, lng, description: p.formatted_address || addr.value.trim() };
+        if (p.formatted_address) addr.value = p.formatted_address;
+        showMapG(lat, lng);
+      });
+    }
+
+    function showMapG(lat, lng) {
+      if (!mapsReady) return;
+      const verify = $("verify"); verify.classList.add("show");
+      const pos = { lat, lng };
+      if (!gmap) {
+        gmap = new google.maps.Map($("map"), {
+          center: pos, zoom: 20, mapTypeId: "hybrid", tilt: 0,
+          streetViewControl: false, fullscreenControl: true,
+          mapTypeControl: true, gestureHandling: "greedy",
+        });
+      } else { gmap.setCenter(pos); gmap.setZoom(20); }
+      if (!gmarker) {
+        gmarker = new google.maps.Marker({ position: pos, map: gmap, draggable: true });
+        gmarker.addListener("dragend", () => {
+          const p = gmarker.getPosition();
+          selectedLoc = { lat: p.lat(), lng: p.lng(),
+            description: (selectedLoc && selectedLoc.description) || addr.value.trim() };
+        });
+      } else { gmarker.setPosition(pos); }
+      verify.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    // ---- Fallback (no browser Maps key): server-geocoding suggestions, no map ----
+    function enableFallback() { if (!mapsReady) fallbackSuggest = true; }
+
+    addr.addEventListener("input", () => {
+      selectedLoc = null;                          // editing invalidates a prior pick
+      if (mapsReady || !fallbackSuggest) return;   // Google Places handles type-ahead
+      const q = addr.value.trim();
+      clearTimeout(suggestTimer);
+      if (q.length < 3) { hideSuggest(); return; }
+      suggestTimer = setTimeout(() => fetchSuggest(q), 300);
+    });
+
+    addr.addEventListener("keydown", (e) => {
+      if (mapsReady || !fallbackSuggest) return;
+      if (e.key === "Enter" && suggestBox.classList.contains("show") && suggestBox.firstElementChild) {
+        e.preventDefault(); e.stopPropagation();
+        suggestBox.firstElementChild.click();
+      } else if (e.key === "Escape") { hideSuggest(); }
+    });
+
+    document.addEventListener("click", (e) => {
+      if (e.target !== addr && !suggestBox.contains(e.target)) hideSuggest();
+    });
+
+    async function fetchSuggest(q) {
+      try {
+        const res = await fetch("/api/suggest?q=" + encodeURIComponent(q));
+        const data = await res.json();
+        renderSuggest(data.suggestions || []);
+      } catch { hideSuggest(); }
+    }
+
+    function renderSuggest(items) {
+      if (!items.length) { hideSuggest(); return; }
+      suggestBox.innerHTML = items.map((s) =>
+        `<div class="suggest-item" role="option">${esc(s.description)}</div>`).join("");
+      [...suggestBox.children].forEach((el, i) =>
+        el.addEventListener("click", () => chooseSuggestion(items[i])));
+      suggestBox.classList.add("show");
+    }
+
+    function hideSuggest() { suggestBox.classList.remove("show"); suggestBox.innerHTML = ""; }
+
+    function chooseSuggestion(s) {
+      selectedLoc = { lat: s.lat, lng: s.lng, description: s.description };
+      addr.value = s.description;
+      hideSuggest();
+    }
+
+    const FACE_COLORS = { N:"#4cc2ff", NE:"#56c6e0", E:"#34d399", SE:"#9bd45a",
+                          S:"#ff7a3c", SW:"#ff6b6b", W:"#c084fc", NW:"#7aa2ff" };
+
+    function renderDiagram(facets) {
+      const wrap = $("diagram-wrap"), svg = $("diagram");
+      if (!facets || !facets.length) { wrap.style.display = "none"; return; }
+      const W = 480, H = 360, pad = 20;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      facets.forEach(f => f.poly.forEach(([x, y]) => {
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+      }));
+      const spanX = (maxX - minX) || 1, spanY = (maxY - minY) || 1;
+      const scale = Math.min((W - 2 * pad) / spanX, (H - 2 * pad) / spanY);
+      const offX = (W - spanX * scale) / 2, offY = (H - spanY * scale) / 2;
+      const toSvg = ([x, y]) => [offX + (x - minX) * scale, H - (offY + (y - minY) * scale)]; // flip Y (N up)
+
+      // Larger facets first so small ones stay visible on top.
+      const sorted = [...facets].sort((a, b) => (b.area_sqft || 0) - (a.area_sqft || 0));
+      let body = "";
+      sorted.forEach(f => {
+        const pts = f.poly.map(toSvg);
+        const col = FACE_COLORS[f.facing] || "#9fb0c0";
+        body += `<polygon points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}" `
+              + `fill="${col}" fill-opacity="0.5" stroke="${col}" stroke-width="1.3"/>`;
+        const c = pts.reduce((a, p) => [a[0] + p[0], a[1] + p[1]], [0, 0]).map(v => v / pts.length);
+        if ((f.area_sqft == null || f.area_sqft > 70) && f.pitch)
+          body += `<text x="${c[0].toFixed(1)}" y="${c[1].toFixed(1)}" fill="#0b121a" font-size="10" `
+                + `font-weight="700" text-anchor="middle" dominant-baseline="middle">${f.pitch}</text>`;
+      });
+      // North arrow
+      body += `<g transform="translate(${W - 24},26)"><line x1="0" y1="11" x2="0" y2="-8" stroke="#9fb0c0" stroke-width="1.5"/>`
+            + `<polygon points="0,-13 -4,-6 4,-6" fill="#9fb0c0"/>`
+            + `<text x="0" y="24" fill="#9fb0c0" font-size="10" text-anchor="middle">N</text></g>`;
+      svg.innerHTML = body;
+
+      const present = [...new Set(facets.map(f => f.facing))];
+      $("diagram-legend").innerHTML = present.map(dir =>
+        `<span class="lg"><i style="background:${FACE_COLORS[dir] || "#9fb0c0"}"></i>${dir}</span>`).join("");
+      wrap.style.display = "";
+    }
+
+    function renderLineLengths(ll) {
+      const llWrap = $("ll-wrap");
+      if (ll) {
+        const order = [["ridge","Ridges"],["hip","Hips"],["valley","Valleys"],["rake","Rakes"],["eave","Eaves"],["junction","Junctions"]];
+        const rows = order.filter(([k]) => ll[k]).map(([k, label]) =>
+          `<tr><td>${label}</td><td>${ll[k].count}</td><td>${fmt(ll[k].length_ft)}</td></tr>`
+        );
+        if (ll.drip_edge) rows.push(
+          `<tr><td style="color:var(--muted)">Drip edge <small>(eaves + rakes)</small></td><td></td><td>${fmt(ll.drip_edge.length_ft)}</td></tr>`
+        );
+        $("lines").innerHTML = rows.join("");
+        llWrap.style.display = "";
+      } else {
+        llWrap.style.display = "none";
+      }
+    }
+
+    function renderAreasPerPitch(rows) {
+      const wrap = $("pitch-wrap");
+      if (!rows || !rows.length) { wrap.style.display = "none"; return; }
+      $("pitches").innerHTML = rows.map(r =>
+        `<tr><td>${r.pitch}</td><td>${fmt(r.area_sqft)}</td><td>${r.percent}%</td></tr>`
+      ).join("");
+      wrap.style.display = "";
+    }
+
+    function renderWaste(rows, complexity, suggested) {
+      const wrap = $("waste-wrap");
+      if (!rows || !rows.length) { wrap.style.display = "none"; return; }
+      $("complexity").textContent = complexity ? "· " + complexity + " complexity" : "";
+      $("waste").innerHTML = rows.map(r => {
+        const hot = r.suggested
+          ? ' style="background:rgba(110,168,254,.16);font-weight:700"' : "";
+        const tag = r.suggested ? " <small>(suggested)</small>" : "";
+        return `<tr${hot}><td>${r.waste_pct}%${tag}</td><td>${fmt(r.area_sqft)}</td><td>${fmt2(r.squares)}</td></tr>`;
+      }).join("");
+      wrap.style.display = "";
+    }
+
+    // Progressive enhancement: the fast /api/measure report shows Solar bounding
+    // boxes; /api/recover runs the real DSM->polygons recovery and we swap in
+    // the true facet outlines + Length Diagram once it returns.
+    async function enhanceGeometry(lat, lng) {
+      const note = $("r-note"), prev = note.textContent;
+      note.textContent = prev + " Refining roof outline…";
+      try {
+        // Version-tag the request so a browser/CDN can't serve an /api/recover
+        // response cached from an older deploy (bump APP_VERSION on geometry
+        // changes to force every client to refetch fresh line lengths/outlines).
+        const APP_VERSION = "2026.06.22";
+        const g = await (await fetch(
+          `/api/recover?lat=${lat}&lng=${lng}&v=${APP_VERSION}`)).json();
+        if (g && g.roof_diagram && g.roof_diagram.length) {
+          renderDiagram(g.roof_diagram);
+          renderLineLengths(g.line_lengths);
+          note.textContent = prev.replace(
+            /Line lengths (unavailable[^.]*|require[^.]*)\.?/,
+            "Roof outline and line lengths from DSM recovery.").trim();
+        } else {
+          note.textContent = prev + (g && g.recovery_status
+            ? " (Detailed outline unavailable: " + g.recovery_status + ".)" : "");
+        }
+      } catch (ex) {
+        note.textContent = prev;  // keep the fast report; enhancement is best-effort
+      }
+    }
+
+    function render(d) {
+      $("r-address").textContent = d.address || "Property";
+      const badge = $("r-badge");
+      const live = d.mode === "live";
+      badge.textContent = live ? "Live · Google Solar" : "Demo data";
+      badge.className = "badge " + (live ? "live" : "demo");
+      const sub = d.archetype
+        ? "· " + d.archetype
+        : (d.imagery_date ? "· Imagery " + d.imagery_date : "");
+      $("r-arch").textContent = sub;
+
+      const r = d.roof;
+      $("stats").innerHTML = [
+        ["Roofing squares", fmt2(r.total_squares), ""],
+        ["Sloped area", fmt(r.total_sloped_sqft), "ft²"],
+        ["Predominant pitch", r.predominant_pitch || "—", ""],
+        ["Squares to order", fmt(r.order_squares), "<small>+" + Math.round(r.waste_pct*100) + "% waste</small>"],
+        ["Facets", r.facet_count, ""],
+        ["Net siding", fmt(d.walls.net_siding_area_sqft), "ft²"],
+      ].map(([l, v, u]) => `<div class="stat"><div class="v">${v} <small>${u||""}</small></div><div class="l">${l}</div></div>`).join("");
+
+      $("facets").innerHTML = d.facets.map((f, i) =>
+        `<tr><td>${i+1}</td><td>${f.pitch}</td><td><span class="facing">${f.facing}</span></td>`+
+        `<td>${fmt(f.sloped_area_sqft)}</td><td>${fmt2(f.squares)}</td></tr>`
+      ).join("");
+
+      renderDiagram(d.roof_diagram);
+
+      renderLineLengths(d.line_lengths);
+      renderAreasPerPitch(d.areas_per_pitch);
+      renderWaste(d.waste_table, d.roof.structure_complexity, d.roof.suggested_waste_pct);
+
+      const w = d.walls, byd = w.by_direction_sqft;
+      const max = Math.max(...Object.values(byd), 1);
+      const order = ["N", "E", "S", "W"];
+      $("wallbars").innerHTML = order.map((dir) => {
+        const val = byd[dir] || 0;
+        return `<div class="bar"><div class="d">${dir}</div>`+
+          `<div class="track"><div class="fill" style="width:${(val/max*100).toFixed(0)}%"></div></div>`+
+          `<div class="n">${fmt(val)}</div></div>`;
+      }).join("");
+
+      $("wallkv").innerHTML = [
+        ["Eave height", w.eave_height_ft + " ft"],
+        ["Footprint", w.footprint_ft.length + " × " + w.footprint_ft.width + " ft"],
+        ["Gross wall area", fmt(w.gross_wall_area_sqft) + " ft²"],
+        ["Gable area", fmt(w.gable_area_sqft) + " ft²"],
+        ["Openings", "−" + fmt(w.openings_sqft) + " ft²"],
+        ["Net siding (+10% waste)", "<b>" + fmt(w.net_siding_area_sqft) + " ft²</b>"],
+      ].map(([k, v]) => `<div class="kv"><span>${k}</span><span>${v}</span></div>`).join("");
+
+      const llNote = d.line_lengths ? ""
+        : (d.recovery_status ? " Line lengths unavailable (" + d.recovery_status + ")."
+                             : " Line lengths require the boundary-recovery step.");
+      const loc = (typeof d.lat === "number" && typeof d.lng === "number")
+        ? " Property location: " + d.lat.toFixed(7) + ", " + d.lng.toFixed(7) + "." : "";
+      const liveNote = "Roof from Google Solar"
+        + (d.imagery_date ? " (imagery " + d.imagery_date + ")" : "")
+        + ". Wall figures are estimated from the roof footprint." + llNote + loc;
+      $("r-note").textContent = d.note ||
+        (live ? liveNote
+              : "Representative sample roof — connect a Google Solar API key for live data.");
+      // Show the building on the Google map for the measured location (live).
+      if (mapsReady && typeof d.lat === "number" && typeof d.lng === "number") showMapG(d.lat, d.lng);
+      result.classList.add("show");
+      result.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  </script>
+</body>
+</html>

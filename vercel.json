@@ -10,6 +10,9 @@
     "api/config.py": { "includeFiles": "roofwall/**" },
     "api/lead.py": { "includeFiles": "roofwall/**" }
   },
+  "redirects": [
+    { "source": "/quote", "destination": "/", "permanent": false }
+  ],
   "headers": [
     {
       "source": "/",
