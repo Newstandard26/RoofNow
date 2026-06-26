@@ -1,9 +1,8 @@
-"""Recommended next step — the conversion CTA, tuned to confidence.
+"""Recommended next step — the conversion CTA (Phase 2.1: success framing).
 
-The next step is always "book the free verification," but the framing changes
-with how confident the measurement is: a clean high-confidence roof leans on
-locking in the price; a low-confidence / not-found roof leans on the
-verification confirming the estimate.
+Never implies the AI failed. The estimate is ready; the next step is a
+complimentary verification. Driven by Estimate Confidence (reliable vs. needs a
+manual review), not by geometry.
 """
 
 from __future__ import annotations
@@ -12,23 +11,32 @@ from typing import Any, Dict
 
 from roofwall.property_report.schema import VERIFICATION_CTA
 
+VERIFICATION_CHECKLIST = [
+    "Verify measurements",
+    "Inspect roof condition",
+    "Check ventilation",
+    "Inspect flashing",
+    "Confirm your final options",
+]
+
 
 def build_recommendation(confidence: Dict[str, Any], found: bool = True) -> Dict[str, Any]:
-    band = (confidence or {}).get("band")
+    """``confidence`` is the customer-facing Estimate Confidence dict."""
+    reliable = bool((confidence or {}).get("reliable", found))
 
-    if not found or band == "low":
-        body = ("Because we couldn't fully measure your roof from aerial imagery, a free, "
-                "no-obligation on-site verification will confirm your exact estimate.")
-    elif band == "medium":
-        body = ("Schedule your free on-site verification — New Standard Restoration will "
-                "confirm the measurements and lock in your exact price.")
+    if reliable:
+        body = ("Your estimate is ready. The final step is a complimentary roof "
+                "verification by a New Standard Restoration expert.")
     else:
-        body = ("Your estimate is ready. Book a free, no-obligation verification with New "
-                "Standard Restoration to lock in your price and timeline.")
+        body = ("The final step is a complimentary roof verification by a New Standard "
+                "Restoration expert, who will measure your roof in person and prepare "
+                "your estimate.")
 
     return {
-        "headline": "Recommended next step",
+        "headline": "Your estimate is ready" if reliable else "Recommended next step",
         "body": body,
+        "checklist": list(VERIFICATION_CHECKLIST),
+        "free_no_obligation": "This inspection is free and carries no obligation.",
         "cta_label": VERIFICATION_CTA,
         "cta_action": "book_inspection",
     }

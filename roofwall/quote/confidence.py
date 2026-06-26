@@ -1,4 +1,15 @@
-"""Confidence engine — how much to trust an instant quote.
+"""Engineering confidence — INTERNAL geometry/measurement QA (Phase 2.1).
+
+This is the *engineering* confidence model: it scores how well the roof geometry
+reconstructed (recovery QA, per-facet confidence, topology). It is for internal
+QA, debugging, and the future admin dashboard only — it is NEVER shown to
+customers. The customer-facing number is :mod:`roofwall.quote.estimate_confidence`
+(Estimate Confidence), which measures expected *pricing* accuracy, not polygon
+quality.
+
+Original docstring follows:
+
+Confidence engine — how much to trust an instant quote.
 
 The instant quote is only as good as the measurement behind it. This module
 turns the measurement report's QA signals into a single, honest verdict:
@@ -40,6 +51,11 @@ class Confidence:
     margin_of_error_pct: float
     reasons: Tuple[str, ...] = ()
     warnings: Tuple[str, ...] = ()
+
+    @property
+    def score(self) -> float:
+        """Engineering confidence as a 0-1 float (for internal storage/admin)."""
+        return round(self.confidence_pct / 100.0, 2)
 
     def to_dict(self) -> dict:
         return {

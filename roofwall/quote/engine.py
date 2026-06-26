@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from roofwall.quote.confidence import assess
+from roofwall.quote.estimate_confidence import assess_estimate
 from roofwall.quote.pricing import (
     DEFAULT_PRICING,
     PricingConfig,
@@ -45,7 +46,7 @@ def build_preview(report: Dict[str, Any]) -> Dict[str, Any]:
     (:func:`build_quote`), so this deliberately omits estimates / price_range.
     """
     roof = report.get("roof") or {}
-    confidence = assess(report)
+    estimate = assess_estimate(report)
     facet_count = int(roof.get("facet_count") or len(report.get("facets") or []))
     found = report.get("mode") == "live" and facet_count > 0
 
@@ -63,7 +64,7 @@ def build_preview(report: Dict[str, Any]) -> Dict[str, Any]:
             "structure_complexity": roof.get("structure_complexity"),
             "facet_count": facet_count,
         },
-        "confidence": confidence.to_dict(),
+        "confidence": estimate.to_dict(),
         "headline": "We found your roof" if found else "We located your property",
         "next_step": "Enter your details to unlock your Good / Better / Best pricing.",
     }
@@ -97,7 +98,11 @@ def build_quote(
     config = config or load_pricing()
     roof = report.get("roof") or {}
 
-    confidence = assess(report)
+    # Customer-facing Estimate Confidence drives the UI + the displayed price
+    # range. Engineering confidence (geometry QA) is computed and stored, but
+    # never shown to customers.
+    estimate = assess_estimate(report)
+    engineering = assess(report)
     order_sq = _order_squares(roof)
     pitch_label = roof.get("predominant_pitch")
     complexity = roof.get("structure_complexity")
@@ -106,7 +111,7 @@ def build_quote(
         order_sq,
         pitch_label,
         complexity,
-        margin_pct=confidence.margin_of_error_pct,
+        margin_pct=estimate.accuracy_pct / 100.0,   # ±5/8/12% from estimate confidence
         config=config,
     )
 
@@ -124,7 +129,11 @@ def build_quote(
             "facet_count": roof.get("facet_count"),
             "suggested_waste_pct": roof.get("suggested_waste_pct"),
         },
-        "confidence": confidence.to_dict(),
+        # Customer-facing confidence == Estimate Confidence.
+        "confidence": estimate.to_dict(),
+        "estimate_confidence": estimate.to_dict(),
+        # Internal only (geometry QA) — stored, never rendered to customers.
+        "engineering_confidence": engineering.score,
         "estimates": [t.to_dict() for t in tiers],
         "price_range": _overall_range(tiers),
         "next_step": "Book a free inspection to lock in your exact price.",

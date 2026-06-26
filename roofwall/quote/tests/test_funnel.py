@@ -21,7 +21,8 @@ _LEAD = {
 }
 _QUOTE = {
     "price_range": {"low": 12000, "high": 21000, "display": "$12,000 – $21,000"},
-    "confidence": {"band": "high", "confidence_pct": 90},
+    "confidence": {"label": "Estimate Confidence", "level": "Excellent Estimate",
+                   "headline": "Excellent", "accuracy_pct": 5, "reliable": True},
 }
 
 
@@ -45,7 +46,7 @@ def test_build_slack_blocks_shape():
     assert "text" in payload and "blocks" in payload
     assert "Jane Roof" in payload["text"]
     assert any(b["type"] == "header" for b in payload["blocks"])
-    assert "high" in payload["text"]
+    assert "Excellent Estimate" in payload["text"]
 
 
 def test_webhook_payload_is_crm_ready():
@@ -57,8 +58,10 @@ def test_webhook_payload_is_crm_ready():
     # quote -> CRM custom fields
     assert p["estimate_low"] == 12000 and p["estimate_high"] == 21000
     assert p["estimate_amount"] == "$12,000 – $21,000"
-    assert p["confidence_band"] == "high"
-    assert p["capture_confidence"] == "Complete"   # high -> Complete
+    assert p["confidence_band"] == "Excellent"          # kept key; estimate level
+    assert p["confidence_level"] == "Excellent Estimate"
+    assert p["estimate_accuracy"] == "±5%"
+    assert p["capture_confidence"] == "Complete"        # Excellent -> Complete
     assert p["lead_priority"] == "Hot"
     # routing defaults
     assert p["source"] == "RoofNow Instant Quote"
@@ -66,10 +69,11 @@ def test_webhook_payload_is_crm_ready():
     assert p["pipeline_stage"] == "New Lead"
 
 
-def test_webhook_payload_band_mapping():
-    low_quote = {"price_range": {"low": 1, "high": 2, "display": "$1 – $2"},
-                 "confidence": {"band": "low", "confidence_pct": 40}}
-    p = lead_to_webhook_payload(_LEAD_FULL, low_quote)
+def test_webhook_payload_level_mapping():
+    manual_quote = {"price_range": {"low": 1, "high": 2, "display": "$1 – $2"},
+                    "confidence": {"level": "Manual Review Recommended",
+                                   "headline": "Manual Review", "accuracy_pct": 15}}
+    p = lead_to_webhook_payload(_LEAD_FULL, manual_quote)
     assert p["capture_confidence"] == "Needs Review"
     assert p["lead_priority"] == "Cold"
 
