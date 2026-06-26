@@ -131,6 +131,8 @@ def build_property_report(
             "estimates": quote.get("estimates"),
             "measurement": quote.get("measurement"),
         },
+        "financing": quote.get("financing"),
+        "service_area": quote.get("service_area"),
         "roof_health": build_roof_health(report),
         "storm_exposure": build_storm_exposure(report),
         "recommended_next_step": build_recommendation(confidence, found=reliable),

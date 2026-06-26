@@ -10,7 +10,9 @@
     "api/config.py": { "includeFiles": "roofwall/**" },
     "api/quote_preview.py": { "includeFiles": "roofwall/**" },
     "api/property_report.py": { "includeFiles": "roofwall/**" },
-    "api/lead.py": { "includeFiles": "roofwall/**" }
+    "api/lead.py": { "includeFiles": "roofwall/**" },
+    "api/admin/login.py": { "includeFiles": "roofwall/**" },
+    "api/admin/pricing.py": { "includeFiles": "roofwall/**" }
   },
   "redirects": [
     { "source": "/quote", "destination": "/", "permanent": false }

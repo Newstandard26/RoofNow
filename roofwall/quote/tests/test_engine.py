@@ -40,7 +40,8 @@ def test_build_quote_shape():
     assert q["estimate_confidence"]["level"] == "Excellent Estimate"
     # engineering confidence stored internally as a 0-1 float, never a band
     assert isinstance(q["engineering_confidence"], float)
-    assert q["measurement"]["order_squares"] == 27
+    # order squares now derives from the admin waste setting (24 * 1.21 Normal)
+    assert q["measurement"]["order_squares"] == pytest.approx(29.04, abs=0.1)
     assert q["price_range"]["low"] > 0
     assert q["price_range"]["high"] >= q["price_range"]["low"]
     assert POWERED_BY in q["disclaimer"]

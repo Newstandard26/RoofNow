@@ -65,5 +65,22 @@
     "Complex": 1.18
   },
   "base_spread_pct": 0.07,
-  "minimum_job_price": 3500.0
+  "minimum_job_price": 3500.0,
+  "waste_defaults": {
+    "Simple": 11,
+    "Normal": 21,
+    "Complex": 26
+  },
+  "accessories": [],
+  "financing": {
+    "enabled": false,
+    "apr": 9.99,
+    "term_months": 120
+  },
+  "service_area": {
+    "enabled": false,
+    "states": [],
+    "zip_prefixes": [],
+    "message": ""
+  }
 }
