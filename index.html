@@ -145,6 +145,28 @@
     .cta p { color: var(--muted); margin: 0; }
     .disclaimer { color: var(--muted); font-size: 12.5px; margin-top: 18px; }
 
+    /* Property Intelligence Report */
+    .report-hero { margin: 6px 0 4px; }
+    .report-hero .kicker { font-size: 12.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--accent); }
+    .report-hero h2 { font-size: clamp(24px, 4.5vw, 36px); margin: 6px 0 6px; letter-spacing: -.5px; }
+    .report-hero p { color: var(--muted); margin: 0; max-width: 640px; }
+    .rsection { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; margin-top: 16px; }
+    .rsection h3 { margin: 0 0 10px; font-size: 17px; }
+    .rsection p { margin: 0; color: var(--muted); font-size: 14.5px; }
+    .ai-text { color: var(--ink); font-size: 15px; }
+    .driver { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+    .driver:first-of-type { border-top: 0; }
+    .driver .dlabel { min-width: 120px; font-weight: 700; font-size: 14px; }
+    .driver .dval { color: var(--accent); font-weight: 700; font-size: 14px; min-width: 90px; }
+    .driver .dnote { color: var(--muted); font-size: 13.5px; }
+    .placeholder { opacity: .92; }
+    .placeholder .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--muted); background: rgba(145,164,180,.12); border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; margin-left: 8px; }
+    .placeholder ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; }
+    .verify { background: linear-gradient(180deg, rgba(81,197,244,.10), var(--panel)); border: 1px solid rgba(81,197,244,.30); border-radius: 16px; padding: 24px; margin-top: 18px; text-align: center; }
+    .verify h3 { margin: 0 0 6px; font-size: 22px; }
+    .verify p { color: var(--muted); margin: 0 0 16px; }
+    .verify a.btn { display: inline-block; padding: 16px 28px; font-size: 16px; font-weight: 800; color: #08151e; text-decoration: none; background: linear-gradient(90deg, var(--accent), var(--accent-deep)); border-radius: 12px; }
+
     footer { border-top: 1px solid var(--line); margin-top: 40px; padding: 26px 0 60px; color: var(--muted); font-size: 13.5px; }
     footer b { color: var(--ink); }
     footer .blue { color: var(--accent); }
@@ -231,24 +253,8 @@
       </div>
     </div>
 
-    <!-- STEP 3 — full quote -->
-    <div id="result">
-      <div class="headline-range">
-        <div class="label">Your estimated roof replacement</div>
-        <div class="big" id="rangeBig">—</div>
-        <div class="addr" id="rangeAddr"></div>
-        <ul class="notes" id="confNotes"></ul>
-      </div>
-
-      <div class="section-title">Your package options</div>
-      <div class="tiers" id="tiers"></div>
-
-      <div class="cta">
-        <h2 id="ctaMsg">You're all set.</h2>
-        <p>New Standard Restoration will verify your roof on-site and confirm your exact price — free, no obligation.</p>
-      </div>
-      <p class="disclaimer" id="disclaimer"></p>
-    </div>
+    <!-- STEP 3 — Property Intelligence Report -->
+    <div id="result"><div id="report"></div></div>
 
     <footer>
       <div><b class="blue">RoofNow</b> is powered by <b>New Standard Restoration</b>. Instant estimates are
@@ -358,9 +364,8 @@
         const data = await r.json().catch(() => ({}));
         if (!r.ok) { $("unlockErr").textContent = (data.errors || [data.error || "Please check your details."]).join(" "); return; }
         hide($("status"));
-        if (data.quote) {
-          renderQuote(data.quote);
-          $("ctaMsg").textContent = "Thanks, " + body.first_name + "!";
+        if (data.report) {
+          renderReport(data.report, body.first_name);
           hide($("teaser")); show($("result"));
           $("result").scrollIntoView({ behavior: "smooth", block: "start" });
         } else {
@@ -375,32 +380,105 @@
       }
     }
 
-    function renderQuote(q) {
-      $("rangeBig").textContent = (q.price_range && q.price_range.display) || "Estimate pending inspection";
-      $("rangeAddr").textContent = q.address || foundAddress || "";
+    // Set to your NSR scheduling link (e.g. Calendly) to make the CTA bookable.
+    const BOOKING_URL = "";
+    const esc2 = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
 
-      const c = q.confidence || {};
-      const notes = $("confNotes");
-      notes.innerHTML = "";
-      (c.reasons || []).forEach((t) => { const li = document.createElement("li"); li.className = "reason"; li.textContent = t; notes.appendChild(li); });
-      (c.warnings || []).forEach((t) => { const li = document.createElement("li"); li.className = "warn"; li.textContent = "⚠ " + t; notes.appendChild(li); });
+    function renderReport(rep, firstName) {
+      const c = rep.confidence || {};
+      const q = rep.quote || {};
+      const pr = q.price_range || {};
+      const snap = rep.roof_snapshot || {};
+      const sum = rep.ai_summary || {};
+      const pe = rep.price_explanation || {};
+      const rh = rep.roof_health || {};
+      const se = rep.storm_exposure || {};
+      const nx = rep.recommended_next_step || {};
+      const html = [];
 
-      const tiers = $("tiers");
-      tiers.innerHTML = "";
-      (q.estimates || []).forEach((t) => {
-        const featured = t.key === "better";
-        const div = document.createElement("div");
-        div.className = "tier" + (featured ? " featured" : "");
-        div.innerHTML =
-          (featured ? '<span class="pop">Most popular</span>' : "") +
-          "<h3>" + t.name + "</h3>" +
-          '<div class="blurb">' + t.blurb + "</div>" +
-          '<div class="price">' + t.price_display + "</div>" +
-          '<div class="persq">' + (t.price_per_square ? "~$" + t.price_per_square.toLocaleString() + " / square installed" : "") + "</div>" +
-          "<ul>" + (t.features || []).map((f) => "<li>" + f + "</li>").join("") + "</ul>";
-        tiers.appendChild(div);
-      });
-      $("disclaimer").textContent = q.disclaimer || "";
+      // Hero
+      html.push('<div class="report-hero">' +
+        '<div class="kicker">RoofNow · Powered by New Standard Restoration</div>' +
+        "<h2>" + (firstName ? esc2(firstName) + ", your" : "Your") + " Roof Intelligence Report is Ready</h2>" +
+        "<p>" + esc2((rep.brand && rep.brand.subheadline) || "") + "</p></div>");
+
+      // Property + estimate headline
+      html.push('<div class="headline-range" style="margin-top:16px">' +
+        '<div class="label">Your estimated roof replacement</div>' +
+        '<div class="big">' + esc2(pr.display || "Estimate pending inspection") + "</div>" +
+        '<div class="addr">' + esc2((rep.property && rep.property.address) || foundAddress || "") + "</div>" +
+        '<div class="confline" style="margin-top:12px"><span class="conf-badge conf-' + esc2(c.band || "low") + '">' +
+          esc2(c.band || "—") + " confidence</span>" +
+          '<span style="color:var(--muted);font-size:14px"><b style="color:var(--ink)">' + esc2(c.confidence_pct != null ? c.confidence_pct + "%" : "—") + "</b> confidence · price accuracy ±" + esc2(c.margin_of_error_pct != null ? c.margin_of_error_pct + "%" : "—") + "</span></div>" +
+        "</div>");
+
+      // Roof snapshot
+      const cards = [];
+      if (snap.total_sloped_sqft) cards.push(["~" + snap.total_sloped_sqft.toLocaleString() + " ft²", "Roof area"]);
+      if (snap.total_squares) cards.push([Math.round(snap.total_squares) + " sq", "Roofing squares"]);
+      if (snap.predominant_pitch) cards.push([snap.predominant_pitch, "Pitch"]);
+      if (snap.structure_complexity) cards.push([snap.structure_complexity, "Complexity"]);
+      if (snap.facet_count) cards.push([snap.facet_count, "Roof faces"]);
+      if (cards.length) {
+        html.push('<div class="rsection"><h3>Roof snapshot</h3><div class="meta-row">' +
+          cards.map(([v, l]) => '<div class="meta"><div class="v">' + esc2(v) + '</div><div class="l">' + esc2(l) + "</div></div>").join("") +
+          "</div></div>");
+      }
+
+      // AI summary
+      if (sum.text) html.push('<div class="rsection"><h3>AI summary</h3><p class="ai-text">' + esc2(sum.text) + "</p></div>");
+
+      // Confidence explanation
+      if ((c.reasons && c.reasons.length) || (c.warnings && c.warnings.length)) {
+        const items = (c.reasons || []).map((t) => '<li class="reason">' + esc2(t) + "</li>")
+          .concat((c.warnings || []).map((t) => '<li class="warn">⚠ ' + esc2(t) + "</li>")).join("");
+        html.push('<div class="rsection"><h3>Measurement confidence</h3><ul class="notes">' + items + "</ul></div>");
+      }
+
+      // Pricing tiers
+      if (q.estimates && q.estimates.length) {
+        html.push('<div class="section-title">Your package options</div><div class="tiers">' +
+          q.estimates.map((t) => {
+            const f = t.key === "better";
+            return '<div class="tier' + (f ? " featured" : "") + '">' +
+              (f ? '<span class="pop">Most popular</span>' : "") +
+              "<h3>" + esc2(t.name) + "</h3><div class=\"blurb\">" + esc2(t.blurb) + "</div>" +
+              '<div class="price">' + esc2(t.price_display) + "</div>" +
+              '<div class="persq">' + (t.price_per_square ? "~$" + t.price_per_square.toLocaleString() + " / square installed" : "") + "</div>" +
+              "<ul>" + (t.features || []).map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul></div>";
+          }).join("") + "</div>");
+      }
+
+      // Why this estimate
+      if (pe.drivers && pe.drivers.length) {
+        html.push('<div class="rsection"><h3>' + esc2(pe.headline || "Why this estimate?") + "</h3>" +
+          '<p style="margin-bottom:10px">' + esc2(pe.basis || "") + "</p>" +
+          pe.drivers.map((d) => '<div class="driver"><div class="dlabel">' + esc2(d.label) + '</div><div class="dval">' + esc2(d.value) + '</div><div class="dnote">' + esc2(d.note || "") + "</div></div>").join("") +
+          "</div>");
+      }
+
+      // Roof health (placeholder)
+      html.push('<div class="rsection placeholder"><h3>' + esc2(rh.headline || "Roof Health") +
+        '<span class="tag">During inspection</span></h3><p>' + esc2(rh.message || "") + "</p>" +
+        (rh.checklist ? "<ul>" + rh.checklist.map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul>" : "") + "</div>");
+
+      // Storm exposure (placeholder)
+      html.push('<div class="rsection placeholder"><h3>' + esc2(se.headline || "Storm Exposure") +
+        '<span class="tag">Coming soon</span></h3><p>' + esc2(se.message || "") + "</p></div>");
+
+      // Verification CTA — links to BOOKING_URL when configured; otherwise the
+      // lead is already captured and NSR reaches out, so show a confirmation.
+      const cta = nx.cta_label || "Schedule Free Roof Verification";
+      const btn = BOOKING_URL
+        ? '<a class="btn" href="' + esc2(BOOKING_URL) + '" target="_blank" rel="noopener">' + esc2(cta) + "</a>"
+        : '<div class="btn" style="cursor:default">✓ ' + esc2(cta) + " requested</div>" +
+          '<p style="margin-top:12px">New Standard Restoration will call you shortly to schedule.</p>';
+      html.push('<div class="verify"><h3>' + esc2(nx.headline || "Recommended next step") + "</h3><p>" + esc2(nx.body || "") + "</p>" + btn + "</div>");
+
+      // Disclaimer
+      if (rep.disclaimer) html.push('<p class="disclaimer">' + esc2(rep.disclaimer) + "</p>");
+
+      $("report").innerHTML = html.join("");
     }
 
     // ---- wiring ----
