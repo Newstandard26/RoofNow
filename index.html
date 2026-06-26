@@ -439,6 +439,17 @@
           '<span style="color:var(--muted);font-size:14px">Expected pricing accuracy ' + esc2(c.accuracy_text || "") + "</span></div>" +
         "</div>");
 
+      // Financing teaser (admin-configured, display-only)
+      const fin = rep.financing;
+      if (fin && fin.text) {
+        html.push('<div class="rsection" style="text-align:center"><h3 style="margin:0;color:var(--accent)">' + esc2(fin.text) + "</h3></div>");
+      }
+      // Service-area note (only when flagged out of area)
+      const sa = rep.service_area;
+      if (sa && sa.in_area === false && sa.message) {
+        html.push('<div class="rsection"><p>' + esc2(sa.message) + "</p></div>");
+      }
+
       // Roof snapshot
       const cards = [];
       if (snap.total_sloped_sqft) cards.push(["~" + snap.total_sloped_sqft.toLocaleString() + " ft²", "Roof area"]);

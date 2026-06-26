@@ -27,7 +27,7 @@ import math
 import os
 import re
 from dataclasses import dataclass, field, replace
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # One roofing "square" = 100 sqft of roof surface (matches the measurement engine).
 ROOFING_SQUARE_SQFT = 100.0
@@ -59,6 +59,20 @@ class PricingConfig:
     base_spread_pct: float = 0.07
     # Floor applied to any non-zero estimate so trivial roofs aren't quoted at $0.
     minimum_job_price: float = 3500.0
+    # --- Phase 3 (admin-dashboard editable) ---
+    # Waste % by structure complexity (used to gross up squares to order).
+    waste_defaults: Dict[str, int] = field(
+        default_factory=lambda: {"Simple": 11, "Normal": 21, "Complex": 26})
+    # Accessory allowances added to each tier's price. Each item:
+    #   {"label": str, "amount": float, "unit": "flat"|"per_square",
+    #    "tiers": [tier keys] or [] for all}
+    accessories: Tuple[Dict[str, Any], ...] = ()
+    # Financing teaser shown on the report (display-only monthly payment).
+    financing: Dict[str, Any] = field(
+        default_factory=lambda: {"enabled": False, "apr": 9.99, "term_months": 120})
+    # Market / service-area gating (soft flag on out-of-area addresses).
+    service_area: Dict[str, Any] = field(
+        default_factory=lambda: {"enabled": False, "states": [], "zip_prefixes": [], "message": ""})
 
 
 DEFAULT_PRICING = PricingConfig(
@@ -134,6 +148,10 @@ def config_to_dict(config: PricingConfig) -> Dict:
         "complexity_multipliers": dict(config.complexity_multipliers),
         "base_spread_pct": config.base_spread_pct,
         "minimum_job_price": config.minimum_job_price,
+        "waste_defaults": dict(config.waste_defaults),
+        "accessories": [dict(a) for a in config.accessories],
+        "financing": dict(config.financing),
+        "service_area": dict(config.service_area),
     }
 
 
@@ -172,12 +190,40 @@ def config_from_dict(data: Dict, *, base: PricingConfig = DEFAULT_PRICING) -> Pr
     if isinstance(data.get("complexity_multipliers"), dict):
         complexity.update({k: float(v) for k, v in data["complexity_multipliers"].items()})
 
+    waste = dict(base.waste_defaults)
+    if isinstance(data.get("waste_defaults"), dict):
+        waste.update({k: int(v) for k, v in data["waste_defaults"].items()})
+
+    if "accessories" in data and data["accessories"] is not None:
+        accessories = tuple(
+            {
+                "label": str(a.get("label", "")),
+                "amount": float(a.get("amount", 0) or 0),
+                "unit": "per_square" if a.get("unit") == "per_square" else "flat",
+                "tiers": list(a.get("tiers", []) or []),
+            }
+            for a in data["accessories"]
+        )
+    else:
+        accessories = base.accessories
+
+    financing = dict(base.financing)
+    if isinstance(data.get("financing"), dict):
+        financing.update(data["financing"])
+    service_area = dict(base.service_area)
+    if isinstance(data.get("service_area"), dict):
+        service_area.update(data["service_area"])
+
     return PricingConfig(
         tiers=tiers,
         pitch_multipliers=pitch,
         complexity_multipliers=complexity,
         base_spread_pct=float(data.get("base_spread_pct", base.base_spread_pct)),
         minimum_job_price=float(data.get("minimum_job_price", base.minimum_job_price)),
+        waste_defaults=waste,
+        accessories=accessories,
+        financing=financing,
+        service_area=service_area,
     )
 
 
@@ -190,14 +236,25 @@ _DEFAULT_PRICING_FILE = os.path.join(
 def load_pricing() -> PricingConfig:
     """Resolve the active rate card. Precedence (first that exists wins):
 
-      1. ``ROOFNOW_PRICING_JSON``  — inline JSON in an env var
-      2. ``ROOFNOW_PRICING_FILE``  — path to a JSON file
-      3. ``pricing.config.json``   — at the repo root, if present
-      4. built-in :data:`DEFAULT_PRICING`
+      1. Supabase active config (admin dashboard) — when configured
+      2. ``ROOFNOW_PRICING_JSON``  — inline JSON in an env var
+      3. ``ROOFNOW_PRICING_FILE``  — path to a JSON file
+      4. ``pricing.config.json``   — at the repo root, if present
+      5. built-in :data:`DEFAULT_PRICING`
 
-    Any parse/validation error falls back to the defaults rather than breaking
+    Any parse/validation error falls back to the next source rather than breaking
     the quote endpoint (and logs to stderr).
     """
+    try:
+        from roofwall.quote import pricing_store
+
+        store_dict = pricing_store.load_active_config_dict()
+        if store_dict:
+            return config_from_dict(store_dict)
+    except Exception as exc:  # noqa: BLE001
+        import sys
+        print(f"[pricing] Supabase config load failed, falling back: {exc}", file=sys.stderr)
+
     inline = os.environ.get("ROOFNOW_PRICING_JSON")
     path = os.environ.get("ROOFNOW_PRICING_FILE") or _DEFAULT_PRICING_FILE
     try:
@@ -279,6 +336,34 @@ def _round_to(value: float, step: int) -> int:
     return int(round(value / step) * step)
 
 
+def _accessory_total(accessories, tier_key: str, order_squares: float) -> float:
+    """Sum the accessory allowances that apply to a tier (flat + per-square)."""
+    total = 0.0
+    for a in accessories or ():
+        tiers = a.get("tiers") or []
+        if tiers and tier_key not in tiers:
+            continue
+        amount = float(a.get("amount", 0) or 0)
+        total += amount * order_squares if a.get("unit") == "per_square" else amount
+    return total
+
+
+def monthly_payment(principal: float, apr: float, term_months: int) -> Optional[int]:
+    """Standard amortized monthly payment, rounded. None if inputs invalid."""
+    try:
+        principal = float(principal)
+        n = int(term_months)
+        r = float(apr) / 100.0 / 12.0
+    except (TypeError, ValueError):
+        return None
+    if principal <= 0 or n <= 0:
+        return None
+    if r <= 0:
+        return int(round(principal / n))
+    pay = principal * (r * (1 + r) ** n) / ((1 + r) ** n - 1)
+    return int(round(pay))
+
+
 def estimate_tiers(
     order_squares: float,
     pitch_label: Optional[str],
@@ -302,6 +387,7 @@ def estimate_tiers(
     out: List[TierEstimate] = []
     for spec in config.tiers:
         raw = order_squares * spec.rate_per_square * p_mult * c_mult
+        raw += _accessory_total(config.accessories, spec.key, order_squares)
         if raw > 0:
             raw = max(raw, config.minimum_job_price)
         price = _round_to(raw, 100)

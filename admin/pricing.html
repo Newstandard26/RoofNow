@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>RoofNow — Pricing Admin</title>
+  <style>
+    :root { --bg:#0e141b; --panel:#141d27; --panel-2:#18222e; --line:#25333f; --ink:#eaf2f8;
+      --muted:#91a4b4; --accent:#51C5F4; --accent-deep:#2ba0e0; --ok:#34d6b0; --bad:#e8746f; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      background:var(--bg); color:var(--ink); line-height:1.5; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 28px 22px 80px; }
+    h1 { font-size: 22px; margin: 0 0 2px; }
+    h1 .b { color: var(--accent); }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:16px; }
+    .card h2 { font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--accent); margin:0 0 14px; }
+    label { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.4px; color:var(--muted); margin:0 0 5px; }
+    input, textarea, select { width:100%; padding:10px 12px; font-size:14px; color:var(--ink);
+      background:#0b121a; border:1px solid var(--line); border-radius:9px; outline:none; font-family:inherit; }
+    input:focus, textarea:focus, select:focus { border-color:var(--accent); }
+    .row { display:grid; gap:12px; margin-bottom:12px; }
+    .g2 { grid-template-columns:1fr 1fr; } .g3 { grid-template-columns:1fr 1fr 1fr; } .g4 { grid-template-columns:repeat(4,1fr); }
+    .field { margin-bottom:12px; }
+    .tier { border:1px solid var(--line); border-radius:11px; padding:14px; margin-bottom:12px; }
+    .tier h3 { margin:0 0 10px; font-size:15px; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { text-align:left; padding:6px 8px; font-size:13px; }
+    th { color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; }
+    button { padding:11px 18px; font-size:14px; font-weight:700; border:0; border-radius:10px; cursor:pointer; }
+    .btn { background:linear-gradient(90deg,var(--accent),var(--accent-deep)); color:#08151e; }
+    .btn.ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
+    .btn.sm { padding:7px 12px; font-size:13px; }
+    .bar { position:sticky; bottom:0; background:linear-gradient(180deg,transparent,var(--bg) 40%); padding:16px 0; display:flex; gap:10px; align-items:center; }
+    .msg { font-size:13px; }
+    .msg.ok { color:var(--ok); } .msg.err { color:var(--bad); }
+    .acc-row { display:grid; grid-template-columns: 2fr 1fr 1.2fr 1.4fr auto; gap:8px; align-items:end; margin-bottom:8px; }
+    .checks { display:flex; gap:10px; font-size:13px; color:var(--ink); text-transform:none; letter-spacing:0; }
+    .checks label { display:flex; align-items:center; gap:5px; text-transform:none; letter-spacing:0; color:var(--ink); margin:0; }
+    .checks input { width:auto; }
+    .preview { background:var(--panel-2); }
+    .pv-tiers { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .pv { border:1px solid var(--line); border-radius:10px; padding:12px; }
+    .pv .n { font-size:13px; color:var(--muted); } .pv .p { font-size:18px; font-weight:800; }
+    .hide { display:none; }
+    #login { max-width:380px; margin:14vh auto 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <!-- LOGIN -->
+    <div id="login" class="card">
+      <h1><span class="b">RoofNow</span> Pricing Admin</h1>
+      <div class="sub">Enter the admin password to manage pricing.</div>
+      <div class="field"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" /></div>
+      <button class="btn" id="loginBtn" style="width:100%">Sign in</button>
+      <div class="msg err" id="loginErr" style="margin-top:10px"></div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dash" class="hide">
+      <h1><span class="b">RoofNow</span> Pricing Admin</h1>
+      <div class="sub">Powered by New Standard Restoration · changes go live on save (<span id="storage">—</span>).</div>
+
+      <div class="card">
+        <h2>Packages — price per square</h2>
+        <div id="tiers"></div>
+      </div>
+
+      <div class="card">
+        <h2>Pitch multipliers (rise / 12 → ×)</h2>
+        <table><thead><tr><th>Rise ≥</th><th>Multiplier</th><th></th></tr></thead><tbody id="pitchRows"></tbody></table>
+        <button class="btn ghost sm" id="addPitch" style="margin-top:8px">+ Add row</button>
+      </div>
+
+      <div class="card">
+        <h2>Complexity multipliers · Waste % · Base settings</h2>
+        <div class="row g3">
+          <div><label>Simple ×</label><input id="cx_Simple" type="number" step="0.01" /></div>
+          <div><label>Normal ×</label><input id="cx_Normal" type="number" step="0.01" /></div>
+          <div><label>Complex ×</label><input id="cx_Complex" type="number" step="0.01" /></div>
+        </div>
+        <div class="row g3">
+          <div><label>Simple waste %</label><input id="w_Simple" type="number" step="1" /></div>
+          <div><label>Normal waste %</label><input id="w_Normal" type="number" step="1" /></div>
+          <div><label>Complex waste %</label><input id="w_Complex" type="number" step="1" /></div>
+        </div>
+        <div class="row g2">
+          <div><label>Base spread (±, e.g. 0.07)</label><input id="spread" type="number" step="0.01" /></div>
+          <div><label>Minimum job price ($)</label><input id="minjob" type="number" step="100" /></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Accessory allowances</h2>
+        <div id="accessories"></div>
+        <button class="btn ghost sm" id="addAcc">+ Add accessory</button>
+      </div>
+
+      <div class="card">
+        <h2>Financing teaser</h2>
+        <div class="checks" style="margin-bottom:12px"><label><input id="fin_on" type="checkbox" /> Show "as low as $X/mo" on the report</label></div>
+        <div class="row g2">
+          <div><label>APR %</label><input id="fin_apr" type="number" step="0.01" /></div>
+          <div><label>Term (months)</label><input id="fin_term" type="number" step="1" /></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Service area</h2>
+        <div class="checks" style="margin-bottom:12px"><label><input id="sa_on" type="checkbox" /> Flag addresses outside the service area</label></div>
+        <div class="row g2">
+          <div><label>States (comma-sep, e.g. IL, WI)</label><input id="sa_states" type="text" /></div>
+          <div><label>ZIP prefixes (comma-sep, e.g. 610, 611)</label><input id="sa_zips" type="text" /></div>
+        </div>
+        <div class="field"><label>Out-of-area message</label><input id="sa_msg" type="text" /></div>
+      </div>
+
+      <div class="card preview">
+        <h2>Live preview — sample 25-square, 6/12, Normal roof</h2>
+        <div class="pv-tiers" id="pvTiers"></div>
+        <div class="sub" id="pvFinancing" style="margin:10px 0 0"></div>
+      </div>
+
+      <div class="bar">
+        <button class="btn ghost" id="previewBtn">Preview</button>
+        <button class="btn" id="saveBtn">Save &amp; publish</button>
+        <span class="msg" id="saveMsg"></span>
+        <span style="flex:1"></span>
+        <button class="btn ghost sm" id="logout">Sign out</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const TOKEN_KEY = "roofnow_admin_token";
+    let token = localStorage.getItem(TOKEN_KEY) || "";
+
+    async function api(method, path, body) {
+      const r = await fetch(path, {
+        method,
+        headers: Object.assign({ "Content-Type": "application/json" },
+          token ? { "Authorization": "Bearer " + token } : {}),
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      if (r.status === 401) { showLogin(); throw new Error("Session expired — sign in again."); }
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || ("Request failed (" + r.status + ")"));
+      return data;
+    }
+
+    function showLogin() { $("dash").classList.add("hide"); $("login").classList.remove("hide"); }
+    function showDash() { $("login").classList.add("hide"); $("dash").classList.remove("hide"); }
+
+    // ---- login ----
+    async function login() {
+      $("loginErr").textContent = "";
+      try {
+        const d = await fetch("/api/admin/login", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: $("pw").value }) }).then((r) => r.json());
+        if (!d.token) throw new Error(d.error || "Incorrect password.");
+        token = d.token; localStorage.setItem(TOKEN_KEY, token);
+        await loadConfig(); showDash();
+      } catch (e) { $("loginErr").textContent = e.message; }
+    }
+
+    // ---- form <-> config ----
+    const TIERS = ["good", "better", "best"];
+    function renderTiers(tiers) {
+      const map = {}; (tiers || []).forEach((t) => (map[t.key] = t));
+      $("tiers").innerHTML = TIERS.map((k) => {
+        const t = map[k] || { key: k, name: k, rate_per_square: 0, blurb: "", features: [] };
+        return '<div class="tier" data-k="' + k + '"><h3>' + (t.name || k) + '</h3>' +
+          '<div class="row g2"><div><label>Name</label><input class="t_name" value="' + esc(t.name) + '"></div>' +
+          '<div><label>Price / square ($)</label><input class="t_rate" type="number" step="1" value="' + (t.rate_per_square || 0) + '"></div></div>' +
+          '<div class="field"><label>Blurb</label><input class="t_blurb" value="' + esc(t.blurb) + '"></div>' +
+          '<div class="field"><label>Features (one per line)</label><textarea class="t_feat" rows="4">' + esc((t.features || []).join("\n")) + '</textarea></div></div>';
+      }).join("");
+    }
+    function renderPitch(rows) {
+      $("pitchRows").innerHTML = (rows || []).map((r) =>
+        '<tr><td><input class="p_thr" type="number" step="1" value="' + r[0] + '" style="width:90px"></td>' +
+        '<td><input class="p_mult" type="number" step="0.01" value="' + r[1] + '" style="width:110px"></td>' +
+        '<td><button class="btn ghost sm" onclick="this.closest(\'tr\').remove()">✕</button></td></tr>').join("");
+    }
+    function addAccessory(a) {
+      a = a || { label: "", amount: 0, unit: "flat", tiers: [] };
+      const div = document.createElement("div");
+      div.className = "acc-row";
+      div.innerHTML =
+        '<div><label>Label</label><input class="a_label" value="' + esc(a.label) + '"></div>' +
+        '<div><label>Amount $</label><input class="a_amt" type="number" step="1" value="' + (a.amount || 0) + '"></div>' +
+        '<div><label>Unit</label><select class="a_unit"><option value="flat"' + (a.unit !== "per_square" ? " selected" : "") + '>flat</option><option value="per_square"' + (a.unit === "per_square" ? " selected" : "") + '>per square</option></select></div>' +
+        '<div><label>Tiers (blank = all)</label><div class="checks">' + TIERS.map((k) =>
+          '<label><input type="checkbox" class="a_tier" value="' + k + '"' + ((a.tiers || []).indexOf(k) >= 0 ? " checked" : "") + '>' + k + "</label>").join("") + "</div></div>" +
+        '<button class="btn ghost sm" onclick="this.closest(\'.acc-row\').remove()">✕</button>';
+      $("accessories").appendChild(div);
+    }
+
+    function populate(cfg) {
+      renderTiers(cfg.tiers);
+      renderPitch(cfg.pitch_multipliers);
+      const cx = cfg.complexity_multipliers || {}, w = cfg.waste_defaults || {};
+      ["Simple", "Normal", "Complex"].forEach((k) => { $("cx_" + k).value = cx[k] != null ? cx[k] : ""; $("w_" + k).value = w[k] != null ? w[k] : ""; });
+      $("spread").value = cfg.base_spread_pct; $("minjob").value = cfg.minimum_job_price;
+      $("accessories").innerHTML = ""; (cfg.accessories || []).forEach(addAccessory);
+      const fin = cfg.financing || {}; $("fin_on").checked = !!fin.enabled; $("fin_apr").value = fin.apr; $("fin_term").value = fin.term_months;
+      const sa = cfg.service_area || {}; $("sa_on").checked = !!sa.enabled;
+      $("sa_states").value = (sa.states || []).join(", "); $("sa_zips").value = (sa.zip_prefixes || []).join(", "); $("sa_msg").value = sa.message || "";
+    }
+
+    function buildConfig() {
+      const tiers = [...$("tiers").querySelectorAll(".tier")].map((el) => ({
+        key: el.dataset.k, name: el.querySelector(".t_name").value.trim(),
+        rate_per_square: parseFloat(el.querySelector(".t_rate").value) || 0,
+        blurb: el.querySelector(".t_blurb").value.trim(),
+        features: el.querySelector(".t_feat").value.split("\n").map((s) => s.trim()).filter(Boolean),
+      }));
+      const pitch = [...$("pitchRows").querySelectorAll("tr")].map((tr) =>
+        [parseInt(tr.querySelector(".p_thr").value) || 0, parseFloat(tr.querySelector(".p_mult").value) || 1]);
+      const csv = (v) => v.split(",").map((s) => s.trim()).filter(Boolean);
+      const accessories = [...$("accessories").querySelectorAll(".acc-row")].map((el) => ({
+        label: el.querySelector(".a_label").value.trim(),
+        amount: parseFloat(el.querySelector(".a_amt").value) || 0,
+        unit: el.querySelector(".a_unit").value,
+        tiers: [...el.querySelectorAll(".a_tier:checked")].map((c) => c.value),
+      })).filter((a) => a.label || a.amount);
+      return {
+        tiers, pitch_multipliers: pitch,
+        complexity_multipliers: { Simple: num("cx_Simple"), Normal: num("cx_Normal"), Complex: num("cx_Complex") },
+        waste_defaults: { Simple: num("w_Simple"), Normal: num("w_Normal"), Complex: num("w_Complex") },
+        base_spread_pct: num("spread"), minimum_job_price: num("minjob"),
+        accessories,
+        financing: { enabled: $("fin_on").checked, apr: num("fin_apr"), term_months: num("fin_term") },
+        service_area: { enabled: $("sa_on").checked, states: csv($("sa_states").value), zip_prefixes: csv($("sa_zips").value), message: $("sa_msg").value.trim() },
+      };
+    }
+    const num = (id) => { const v = parseFloat($(id).value); return isNaN(v) ? 0 : v; };
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+    function renderSample(s) {
+      if (!s) return;
+      $("pvTiers").innerHTML = (s.estimates || []).map((e) =>
+        '<div class="pv"><div class="n">' + esc(e.name) + '</div><div class="p">' + esc(e.price_display) + "</div></div>").join("");
+      $("pvFinancing").textContent = s.financing && s.financing.text ? s.financing.text : "";
+    }
+
+    async function loadConfig() {
+      const d = await api("GET", "/api/admin/pricing");
+      $("storage").textContent = d.storage === "supabase" ? "Supabase" : "fallback (set SUPABASE_URL)";
+      populate(d.config); renderSample(d.sample);
+    }
+    async function preview() {
+      $("saveMsg").textContent = "";
+      try { const d = await api("POST", "/api/admin/pricing", { config: buildConfig(), preview: true }); renderSample(d.sample);
+        flash("Preview updated.", true); } catch (e) { flash(e.message, false); }
+    }
+    async function save() {
+      $("saveMsg").textContent = "";
+      try { const d = await api("POST", "/api/admin/pricing", { config: buildConfig() }); renderSample(d.sample);
+        flash("Saved & published.", true); } catch (e) { flash(e.message, false); }
+    }
+    function flash(m, ok) { const el = $("saveMsg"); el.textContent = m; el.className = "msg " + (ok ? "ok" : "err"); }
+
+    // wiring
+    $("loginBtn").addEventListener("click", login);
+    $("pw").addEventListener("keydown", (e) => { if (e.key === "Enter") login(); });
+    $("addPitch").addEventListener("click", () => { const tb = $("pitchRows"); const tr = document.createElement("tr");
+      tr.innerHTML = '<td><input class="p_thr" type="number" step="1" value="0" style="width:90px"></td><td><input class="p_mult" type="number" step="0.01" value="1" style="width:110px"></td><td><button class="btn ghost sm" onclick="this.closest(\'tr\').remove()">✕</button></td>'; tb.appendChild(tr); });
+    $("addAcc").addEventListener("click", () => addAccessory());
+    $("previewBtn").addEventListener("click", preview);
+    $("saveBtn").addEventListener("click", save);
+    $("logout").addEventListener("click", () => { localStorage.removeItem(TOKEN_KEY); token = ""; showLogin(); });
+
+    // boot: try existing token
+    (async () => { if (token) { try { await loadConfig(); showDash(); } catch { showLogin(); } } else showLogin(); })();
+  </script>
+</body>
+</html>

@@ -70,13 +70,22 @@ def build_preview(report: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _order_squares(roof: Dict[str, Any]) -> float:
-    """The waste-inclusive squares to install. Prefer ``order_squares``; fall
-    back to total squares grossed up by the suggested waste factor."""
+def _order_squares(roof: Dict[str, Any], config: Optional[PricingConfig] = None) -> float:
+    """The waste-inclusive squares to install.
+
+    When the admin rate card defines a waste % for this complexity, gross the
+    measured area up by it (so dashboard waste changes take effect). Otherwise
+    fall back to the measured ``order_squares`` / the report's suggested waste.
+    """
+    total = float(roof.get("total_squares") or 0.0)
+    complexity = roof.get("structure_complexity")
+    waste_defaults = getattr(config, "waste_defaults", None) if config else None
+    if total > 0 and isinstance(waste_defaults, dict) and complexity in waste_defaults:
+        return total * (1.0 + float(waste_defaults[complexity]) / 100.0)
+
     order = roof.get("order_squares")
     if isinstance(order, (int, float)) and order > 0:
         return float(order)
-    total = float(roof.get("total_squares") or 0.0)
     waste = roof.get("suggested_waste_pct")
     if total > 0 and isinstance(waste, (int, float)):
         return total * (1.0 + waste / 100.0)
@@ -103,7 +112,7 @@ def build_quote(
     # never shown to customers.
     estimate = assess_estimate(report)
     engineering = assess(report)
-    order_sq = _order_squares(roof)
+    order_sq = _order_squares(roof, config)
     pitch_label = roof.get("predominant_pitch")
     complexity = roof.get("structure_complexity")
 
@@ -114,6 +123,9 @@ def build_quote(
         margin_pct=estimate.accuracy_pct / 100.0,   # ±5/8/12% from estimate confidence
         config=config,
     )
+    price_range = _overall_range(tiers)
+    financing = _financing_teaser(config, price_range)
+    service_area = _service_area_flag(config, report.get("address"))
 
     quote: Dict[str, Any] = {
         "brand": BRAND,
@@ -135,11 +147,56 @@ def build_quote(
         # Internal only (geometry QA) — stored, never rendered to customers.
         "engineering_confidence": engineering.score,
         "estimates": [t.to_dict() for t in tiers],
-        "price_range": _overall_range(tiers),
+        "price_range": price_range,
+        "financing": financing,
+        "service_area": service_area,
         "next_step": "Book a free inspection to lock in your exact price.",
         "disclaimer": DISCLAIMER,
     }
     return quote
+
+
+def _financing_teaser(config, price_range) -> Optional[Dict[str, Any]]:
+    """Display-only "as low as $X/mo" from the admin financing settings."""
+    from roofwall.quote.pricing import monthly_payment
+
+    fin = getattr(config, "financing", None) or {}
+    if not fin.get("enabled"):
+        return None
+    principal = (price_range or {}).get("low")
+    pay = monthly_payment(principal, fin.get("apr", 0), fin.get("term_months", 0))
+    if not pay:
+        return None
+    return {
+        "enabled": True,
+        "monthly": pay,
+        "apr": fin.get("apr"),
+        "term_months": fin.get("term_months"),
+        "text": f"As low as ${pay:,}/mo with approved financing",
+    }
+
+
+def _service_area_flag(config, address: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Soft flag when an address looks outside NSR's configured service area."""
+    sa = getattr(config, "service_area", None) or {}
+    if not sa.get("enabled") or not address:
+        return None
+    addr = str(address).upper()
+    states = [str(s).upper() for s in sa.get("states", []) if s]
+    zips = [str(z) for z in sa.get("zip_prefixes", []) if z]
+    in_area = True
+    if states or zips:
+        in_state = any(f", {s} " in addr or f", {s}," in addr or addr.endswith(f", {s}")
+                       for s in states)
+        import re as _re
+        zip_match = _re.search(r"\b(\d{5})\b", addr)
+        in_zip = bool(zip_match and any(zip_match.group(1).startswith(z) for z in zips))
+        in_area = (in_state or not states) and (in_zip or not zips) if (states and zips) \
+            else (in_state or in_zip)
+    return {
+        "in_area": in_area,
+        "message": sa.get("message", "") if not in_area else "",
+    }
 
 
 def _overall_range(tiers) -> Dict[str, Any]:
