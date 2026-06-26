@@ -39,10 +39,18 @@ def _client_ip(headers) -> str:
     return headers.get("x-real-ip", "") or "unknown"
 
 
-def _quote_for(address):
-    """Measure + quote for an address. Never raises -> returns None on failure."""
+def _to_float(v):
     try:
-        report = measure_address(address=address)
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _quote_for(address, lat=None, lng=None):
+    """Measure + quote for an address. Prefers exact lat/lng (from address
+    autocomplete) for accuracy. Never raises -> returns None on failure."""
+    try:
+        report = measure_address(address=address, lat=lat, lng=lng)
         return build_quote(report)
     except Exception as exc:  # noqa: BLE001
         print(f"[lead] quote failed for {address!r}: {exc}", file=sys.stderr)
@@ -95,8 +103,9 @@ class handler(BaseHTTPRequestHandler):
             return
 
         # Build the quote (so the funnel notification carries the estimate), then
-        # funnel the lead, then return the quote to the browser.
-        quote = _quote_for(lead["address"])
+        # funnel the lead, then return the quote to the browser. Prefer the exact
+        # lat/lng from address autocomplete when the form provided it.
+        quote = _quote_for(lead["address"], _to_float(payload.get("lat")), _to_float(payload.get("lng")))
         if quote and not lead.get("estimate_low"):
             pr = quote.get("price_range") or {}
             lead["estimate_low"] = pr.get("low")
