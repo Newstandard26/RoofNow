@@ -7,7 +7,8 @@
     "api/recover.py": { "includeFiles": "roofwall/**" },
     "api/facets.py": { "includeFiles": "roofwall/**" },
     "api/suggest.py": { "includeFiles": "roofwall/**" },
-    "api/config.py": { "includeFiles": "roofwall/**" }
+    "api/config.py": { "includeFiles": "roofwall/**" },
+    "api/lead.py": { "includeFiles": "roofwall/**" }
   },
   "headers": [
     {
