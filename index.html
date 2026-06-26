@@ -4,347 +4,383 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RoofNow — What's Your Roof Replacement Likely to Cost?</title>
-  <meta name="description" content="Enter your address and RoofNow will estimate your roof size, pitch, and replacement cost using aerial data, AI measurements, and local pricing. Powered by New Standard Restoration — licensed & insured roofing professionals." />
+  <meta name="description" content="Get an AI-powered roof replacement estimate in under 30 seconds. Enter your address and RoofNow estimates your roof size, pitch, and replacement cost. Powered by New Standard Restoration — licensed & insured roofing in Northern Illinois." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
   <style>
     :root {
-      /* New Standard Restoration brand — near-black / charcoal / dark slate / white / NSR blue */
-      --bg: #0a0e14;            /* near black */
-      --panel: #121a24;         /* charcoal */
-      --panel-2: #18222e;       /* dark slate */
-      --line: #243340;
-      --ink: #f3f7fb;           /* white */
-      --muted: #9fb0c0;         /* light gray */
-      --accent: #51C5F4;        /* NSR blue */
-      --accent-deep: #2ba0e0;
-      --ok: #34d6b0; --warn: #e7b765; --bad: #e8746f;
-      --maxw: 1080px;
+      --nsr-blue: #51C5F4;
+      --nsr-blue-dark: #1597d4;
+      --dark: #050A10;
+      --dark-2: #0B1118;
+      --charcoal: #121A24;
+      --white: #FFFFFF;
+      --text: #F4F7FB;
+      --muted: #B8C3CF;
+      --light-bg: #F7F9FC;
+      --light-text: #101820;
+      --light-muted: #5F6B7A;
+      --border: rgba(255,255,255,0.14);
+      /* aliases used by the estimate-flow components */
+      --accent: var(--nsr-blue); --accent-deep: var(--nsr-blue-dark);
+      --panel: var(--charcoal); --panel-2: #18222e; --line: var(--border);
+      --ink: var(--text); --ok: #34d6b0; --warn: #e7b765; --bad: #e8746f;
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
-      margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg); color: var(--ink); line-height: 1.6; -webkit-font-smoothing: antialiased; min-height: 100vh;
+      margin: 0; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--dark); color: var(--text); line-height: 1.6; -webkit-font-smoothing: antialiased;
     }
-    .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+    img { max-width: 100%; }
 
-    /* Top navigation */
-    .topnav { position: sticky; top: 0; z-index: 50; background: rgba(10,14,20,.78);
-      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
-    .topnav .inner { max-width: var(--maxw); margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
-    .lockup { display: flex; align-items: center; gap: 12px; text-decoration: none; }
-    .lockup img { height: 44px; width: auto; display: block; }
-    .lockup .txt .name { font-size: 18px; font-weight: 800; letter-spacing: .2px; line-height: 1; color: var(--ink); }
-    .lockup .txt .by { font-size: 11px; color: var(--muted); margin-top: 3px; }
-    .lockup .txt .by b { color: var(--accent); font-weight: 700; }
-    .navspace { flex: 1; }
-    .navbtns { display: flex; gap: 10px; align-items: center; }
-    .navbtn { font-size: 14px; font-weight: 700; padding: 10px 16px; border-radius: 10px; text-decoration: none;
-      cursor: pointer; white-space: nowrap; border: 1px solid transparent; background: none; }
-    .navbtn.ghost { color: var(--ink); border-color: var(--line); }
-    .navbtn.ghost:hover { border-color: var(--accent); color: var(--accent); }
-    .navbtn.solid { color: #06131c; background: linear-gradient(90deg, var(--accent), var(--accent-deep)); }
-    @media (max-width: 620px) { .navbtn.callnow { display: none; } .lockup .txt .by { display: none; } .lockup img { height: 38px; } }
+    /* ---------------- Header ---------------- */
+    .site-header { background: var(--dark); border-bottom: 1px solid var(--border); }
+    .site-header .inner { max-width: 1180px; margin: 0 auto; height: 96px; display: flex; align-items: center; gap: 20px; padding: 0 24px; }
+    .brand-lockup { display: flex; align-items: center; gap: 16px; text-decoration: none; }
+    .brand-lockup img { height: 76px; width: auto; display: block; }
+    .brand-divider { width: 1px; height: 46px; background: var(--border); }
+    .wordmark { font-weight: 900; font-size: 24px; letter-spacing: .02em; line-height: 1; }
+    .wordmark .roof { color: #fff; } .wordmark .now { color: var(--nsr-blue); }
+    .wordmark .pb { display: block; font-size: 11px; font-weight: 600; letter-spacing: .01em; color: var(--muted); margin-top: 6px; }
+    .header-space { flex: 1; }
+    .header-right { display: flex; align-items: center; gap: 18px; }
+    .header-phone { color: #fff; font-weight: 800; font-size: 18px; text-decoration: none; white-space: nowrap; }
+    .header-phone:hover { color: var(--nsr-blue); }
+    .btn-schedule { background: var(--nsr-blue); color: #041018; border-radius: 4px; padding: 14px 24px; font-weight: 800; text-transform: uppercase; text-decoration: none; font-size: 14px; letter-spacing: .02em; white-space: nowrap; display: inline-block; }
+    .btn-schedule:hover { background: #6fd0f7; }
+    @media (max-width: 860px) { .site-header .inner { height: 76px; } .brand-lockup img { height: 56px; } .header-phone { display: none; } .wordmark { font-size: 20px; } }
+    @media (max-width: 560px) { .btn-schedule { padding: 11px 15px; font-size: 12px; } .wordmark .pb { display: none; } .brand-divider { height: 38px; } }
 
-    /* Hero */
-    .hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
-    .hero::before { content: ""; position: absolute; inset: 0; z-index: 0;
-      background:
-        radial-gradient(900px 480px at 80% -10%, rgba(81,197,244,.22), transparent 60%),
-        radial-gradient(680px 420px at 6% 115%, rgba(43,160,224,.12), transparent 60%),
-        linear-gradient(180deg, #0c121b 0%, var(--bg) 92%); }
-    /* Optional hero photo: set --hero-image to url('/assets/hero.jpg') to layer it in. */
-    .hero::after { content: ""; position: absolute; inset: 0; z-index: 0;
-      background-image: var(--hero-image, none); background-size: cover; background-position: center;
-      opacity: .16; mix-blend-mode: luminosity; }
-    .hero .inner { position: relative; z-index: 1; max-width: var(--maxw); margin: 0 auto; padding: 60px 24px 34px; }
-    .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700;
-      letter-spacing: .4px; color: var(--accent); background: rgba(81,197,244,.10);
-      border: 1px solid rgba(81,197,244,.30); padding: 6px 13px; border-radius: 999px; }
-    .eyebrow .tick { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-    h1 { font-size: clamp(32px, 6vw, 58px); line-height: 1.03; margin: 18px 0 14px; letter-spacing: -1.5px; font-weight: 800; }
-    h1 .grad { background: linear-gradient(90deg, var(--accent), #cdeefe); -webkit-background-clip: text; background-clip: text; color: transparent; }
-    .lede { font-size: clamp(16px, 2.3vw, 20px); color: var(--muted); max-width: 640px; }
-
-    /* Glass treatment for the in-hero address card */
-    .hero .tool { background: rgba(18,26,36,.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-      border: 1px solid rgba(81,197,244,.18); box-shadow: 0 24px 60px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.05); }
-
-    .tool { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px; margin: 26px 0 8px; }
-    .tool h2.step { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--accent); margin: 0 0 12px; font-weight: 700; }
-    label { display: block; font-size: 12.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 0 0 6px; }
-    .field { margin-bottom: 14px; }
-    input[type="text"], input[type="email"], input[type="tel"] {
-      width: 100%; padding: 15px 16px; font-size: 16px; color: var(--ink);
-      background: #0b121a; border: 1px solid var(--line); border-radius: 12px; outline: none;
+    /* ---------------- Hero ---------------- */
+    .hero {
+      position: relative; min-height: 620px; display: flex; align-items: center;
+      background-color: var(--dark);
+      background-image:
+        linear-gradient(90deg, rgba(5,10,16,0.98) 0%, rgba(5,10,16,0.82) 44%, rgba(5,10,16,0.35) 100%),
+        var(--hero-image, url('/assets/roof-hero.jpg'));
+      background-size: cover; background-position: center right; background-repeat: no-repeat;
     }
-    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(81,197,244,.15); }
-    input.bad { border-color: var(--bad); }
-    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .hero .inner { max-width: 1180px; margin: 0 auto; padding: 88px 24px 74px; width: 100%; }
+    .hero-col { max-width: 540px; }
+    .eyebrow { font-size: 18px; font-weight: 800; letter-spacing: .04em; margin-bottom: 28px; }
+    .eyebrow .roof { color: #fff; } .eyebrow .now { color: var(--nsr-blue); }
+    .hero h1 { font-size: clamp(46px, 6vw, 72px); line-height: 0.98; font-weight: 900; letter-spacing: -0.04em; color: #fff; margin: 0; }
+    .hero h1 .blue { color: var(--nsr-blue); }
+    .hero .sub { font-size: 20px; line-height: 1.55; color: rgba(255,255,255,.88); margin-top: 26px; max-width: 520px; }
 
-    /* Address autocomplete */
+    .addr-form { margin-top: 34px; max-width: 530px; }
     .addr-wrap { position: relative; }
-    .suggest { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30;
-      background: #0b121a; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: none; }
+    #address { width: 100%; height: 58px; background: rgba(5,10,16,.55); border: 1px solid rgba(255,255,255,.38); border-radius: 3px; color: #fff; padding: 0 18px; font-size: 16px; outline: none; }
+    #address::placeholder { color: rgba(255,255,255,.6); }
+    #address:focus { border-color: var(--nsr-blue); }
+    #goBtn { width: 100%; height: 58px; margin-top: 18px; background: linear-gradient(180deg, #51C5F4 0%, #1597d4 100%); color: #031019; font-weight: 900; text-transform: uppercase; border: 0; border-radius: 4px; font-size: 16px; letter-spacing: .02em; cursor: pointer; }
+    #goBtn:disabled { opacity: .7; cursor: default; }
+    .secure-note { font-size: 14px; color: rgba(255,255,255,.72); margin-top: 18px; }
+    .addr-verified { display: none; margin-top: 12px; font-size: 13px; color: var(--nsr-blue); }
+    .addr-verified.show { display: block; }
+    #addressErr { color: #ffb4b0; font-size: 14px; margin-top: 10px; }
+    .suggest { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30; background: #0b121a; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; display: none; }
     .suggest.show { display: block; }
-    .suggest-item { padding: 12px 16px; font-size: 15px; cursor: pointer; border-bottom: 1px solid var(--line); }
+    .suggest-item { padding: 12px 16px; font-size: 15px; color: #fff; cursor: pointer; border-bottom: 1px solid var(--border); }
     .suggest-item:last-child { border-bottom: 0; }
-    .suggest-item:hover { background: rgba(81,197,244,.10); }
-    .addr-verified { display: none; align-items: center; gap: 7px; margin-top: 8px; font-size: 13px; color: var(--ok); }
-    .addr-verified.show { display: flex; }
-    /* Google Places dropdown — dark theme */
-    .pac-container { background: #0b121a; border: 1px solid var(--line); border-radius: 12px; margin-top: 6px;
-      box-shadow: 0 12px 30px rgba(0,0,0,.45); font-family: inherit; }
-    .pac-item { padding: 10px 14px; color: var(--muted); border-top: 1px solid var(--line); cursor: pointer; }
-    .pac-item:first-child { border-top: 0; }
-    .pac-item:hover, .pac-item-selected { background: rgba(81,197,244,.10); }
-    .pac-item-query { color: var(--ink); font-size: 15px; }
-    .pac-matched { color: var(--accent); }
-    .pac-icon { display: none; }
-    button {
-      padding: 16px 24px; font-size: 16px; font-weight: 800; color: #08151e; cursor: pointer; width: 100%;
-      background: linear-gradient(90deg, var(--accent), var(--accent-deep)); border: 0; border-radius: 12px;
-      letter-spacing: .2px;
-    }
-    button:disabled { opacity: .6; cursor: default; }
-    .examples { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .examples .lbl { font-size: 13px; color: var(--muted); }
-    .chip { font-size: 13px; color: var(--accent); background: rgba(81,197,244,.08); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; cursor: pointer; }
-    .chip:hover { background: rgba(81,197,244,.16); }
-    .err { color: var(--bad); font-size: 14px; margin-top: 10px; }
-    .privacy { color: var(--muted); font-size: 12.5px; margin-top: 12px; }
+    .suggest-item:hover { background: rgba(81,197,244,.12); }
+    /* Google Places dropdown — dark */
+    .pac-container { background: #0b121a; border: 1px solid var(--border); border-radius: 6px; margin-top: 6px; box-shadow: 0 14px 34px rgba(0,0,0,.5); font-family: inherit; }
+    .pac-item { padding: 10px 14px; color: var(--muted); border-top: 1px solid var(--border); cursor: pointer; }
+    .pac-item:first-child { border-top: 0; } .pac-item:hover, .pac-item-selected { background: rgba(81,197,244,.10); }
+    .pac-item-query { color: #fff; font-size: 15px; } .pac-matched { color: var(--nsr-blue); } .pac-icon { display: none; }
+    @media (max-width: 560px) { .hero h1 { font-size: 42px; } .hero .inner { padding: 56px 22px 52px; } .hero .sub { font-size: 18px; } }
 
-    /* Trust strip */
-    .trust { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0 4px; }
-    .trust .t { background: var(--panel-2); border: 1px solid var(--line); border-radius: 13px; padding: 14px 16px; font-size: 13.5px; color: var(--ink); }
-    .trust .t .ic { color: var(--accent); font-weight: 800; margin-right: 7px; }
-    .trust .t span.sub { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
-    @media (max-width: 640px) { .trust { grid-template-columns: 1fr; } .grid2 { grid-template-columns: 1fr; } }
-
-    .reviews { margin: 22px 0 8px; }
-    .reviews-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
-    .reviews-card iframe { display: block; }
-
-    #status { margin: 18px 0; color: var(--muted); display: none; }
-    #status.show { display: flex; align-items: center; gap: 12px; }
-    .spinner { width: 18px; height: 18px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+    /* ---------------- Estimate flow (hidden until address submitted) ---------------- */
+    .flow { background: var(--dark); }
+    .flow .inner { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+    #status { margin: 28px auto; max-width: 760px; padding: 0 24px; color: var(--muted); display: none; align-items: center; gap: 12px; }
+    #status.show { display: flex; }
+    .spinner { width: 18px; height: 18px; border: 3px solid var(--border); border-top-color: var(--nsr-blue); border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Teaser (step 2) */
-    #teaser { display: none; margin: 18px 0 8px; }
-    #teaser.show { display: block; }
-    .teaser-card { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid rgba(81,197,244,.28); border-radius: 18px; padding: 24px; }
+    #teaser, #result { display: none; }
+    #teaser.show, #result.show { display: block; }
+    #teaser { max-width: 760px; margin: 28px auto; padding: 0 24px; }
+    #result { max-width: 760px; margin: 28px auto 8px; padding: 0 24px; }
+    .panel, .teaser-card, .headline-range, .rsection, .tier, .verify, .report-hero { background: var(--charcoal); border: 1px solid var(--border); border-radius: 14px; }
+    .teaser-card { padding: 24px; }
     .teaser-card .found { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; }
-    .teaser-card .found .pin { color: var(--accent); }
+    .teaser-card .found .pin { color: var(--nsr-blue); }
     .teaser-card .addr { color: var(--muted); font-size: 14px; margin: 4px 0 16px; }
     .meta-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 16px; }
-    .meta { background: #0b121a; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
-    .meta .v { font-size: 20px; font-weight: 800; }
-    .meta .l { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+    .meta { background: #0b121a; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+    .meta .v { font-size: 20px; font-weight: 800; } .meta .l { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
     .confline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
     .conf-badge { font-weight: 800; font-size: 12.5px; padding: 5px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .4px; }
     .conf-high { background: rgba(52,214,176,.16); color: var(--ok); }
     .conf-medium { background: rgba(231,183,101,.16); color: var(--warn); }
     .conf-low { background: rgba(232,116,111,.16); color: var(--bad); }
-    .ready { color: var(--accent); font-weight: 700; }
-    .unlock { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 18px; }
-    .unlock h3 { margin: 0 0 4px; font-size: 18px; }
-    .unlock p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
-
-    /* Full quote (step 3) */
-    #result { display: none; margin: 8px 0 36px; }
-    #result.show { display: block; }
-    .headline-range { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: 18px; padding: 26px; }
-    .headline-range .label { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
-    .headline-range .big { font-size: clamp(30px, 6vw, 46px); font-weight: 800; letter-spacing: -1px; margin-top: 4px; }
+    .ready { color: var(--nsr-blue); font-weight: 700; }
+    .unlock { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 18px; }
+    .unlock h3 { margin: 0 0 4px; font-size: 18px; } .unlock p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .flow label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); margin: 0 0 5px; }
+    .flow .field { margin-bottom: 12px; }
+    .flow input { width: 100%; padding: 13px 14px; font-size: 15px; color: #fff; background: #0b121a; border: 1px solid var(--border); border-radius: 10px; outline: none; }
+    .flow input:focus { border-color: var(--nsr-blue); } .flow input.bad { border-color: var(--bad); }
+    .flow button#unlockBtn { width: 100%; padding: 15px; font-size: 15px; font-weight: 800; color: #031019; background: linear-gradient(180deg, #51C5F4, #1597d4); border: 0; border-radius: 10px; cursor: pointer; }
+    .err { color: var(--bad); font-size: 14px; margin-top: 10px; } .privacy { color: var(--muted); font-size: 12.5px; margin-top: 12px; }
+    .report-hero { padding: 22px 24px; }
+    .report-hero .kicker { font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--nsr-blue); }
+    .report-hero h2 { font-size: clamp(22px, 4vw, 30px); margin: 8px 0 4px; letter-spacing: -.5px; } .report-hero p { color: var(--muted); margin: 0; }
+    .headline-range { padding: 24px; }
+    .headline-range .label { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+    .headline-range .big { font-size: clamp(28px, 5vw, 42px); font-weight: 800; letter-spacing: -1px; margin-top: 4px; }
     .headline-range .addr { color: var(--muted); margin-top: 6px; font-size: 14px; }
-    .notes { margin: 12px 0 0; font-size: 13.5px; }
-    .notes li { margin: 3px 0; }
-    .notes .reason::marker { color: var(--ok); }
-    .notes .warn::marker { color: var(--warn); }
-    .section-title { margin: 28px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .7px; color: var(--accent); font-weight: 700; }
-    .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
-    .tier { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; }
-    .tier.featured { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-    .tier .pop { align-self: flex-start; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--accent); background: rgba(81,197,244,.14); border-radius: 999px; padding: 3px 9px; margin-bottom: 8px; }
-    .tier h3 { margin: 0 0 4px; font-size: 20px; }
-    .tier .blurb { color: var(--muted); font-size: 13.5px; min-height: 38px; }
-    .tier .price { font-size: 26px; font-weight: 800; letter-spacing: -.5px; margin: 12px 0 2px; }
-    .tier .persq { color: var(--muted); font-size: 12.5px; }
+    .notes { margin: 12px 0 0; font-size: 13.5px; } .notes li { margin: 3px 0; }
+    .notes .reason::marker { color: var(--ok); } .notes .warn::marker { color: var(--warn); }
+    .section-title { margin: 26px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--nsr-blue); font-weight: 700; }
+    .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    .tier { padding: 20px; display: flex; flex-direction: column; }
+    .tier.featured { border-color: var(--nsr-blue); box-shadow: 0 0 0 1px var(--nsr-blue) inset; }
+    .tier .pop { align-self: flex-start; font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--nsr-blue); background: rgba(81,197,244,.14); border-radius: 999px; padding: 3px 9px; margin-bottom: 8px; }
+    .tier h3 { margin: 0 0 4px; font-size: 20px; } .tier .blurb { color: var(--muted); font-size: 13.5px; min-height: 38px; }
+    .tier .price { font-size: 24px; font-weight: 800; margin: 12px 0 2px; } .tier .persq { color: var(--muted); font-size: 12.5px; }
     .tier ul { list-style: none; padding: 0; margin: 14px 0 0; font-size: 13.5px; }
     .tier ul li { padding: 5px 0 5px 22px; position: relative; color: var(--muted); }
-    .tier ul li::before { content: "✓"; position: absolute; left: 0; color: var(--accent); font-weight: 800; }
-    .cta { background: linear-gradient(180deg, var(--panel-2), var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 22px; margin-top: 22px; }
-    .cta h2 { margin: 0 0 6px; font-size: 20px; }
-    .cta p { color: var(--muted); margin: 0; }
+    .tier ul li::before { content: "✓"; position: absolute; left: 0; color: var(--nsr-blue); font-weight: 800; }
+    .rsection { padding: 20px 22px; margin-top: 16px; } .rsection h3 { margin: 0 0 10px; font-size: 17px; } .rsection p { margin: 0; color: var(--muted); font-size: 14.5px; }
+    .ai-text { color: var(--text); font-size: 15px; }
+    .driver { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); } .driver:first-of-type { border-top: 0; }
+    .driver .dlabel { min-width: 120px; font-weight: 700; font-size: 14px; } .driver .dval { color: var(--nsr-blue); font-weight: 700; font-size: 14px; min-width: 90px; } .driver .dnote { color: var(--muted); font-size: 13.5px; }
+    ul.checklist { list-style: none; padding: 0; margin: 12px 0 0; } ul.checklist li { padding: 6px 0 6px 24px; position: relative; color: var(--muted); font-size: 14px; }
+    ul.checklist li::before { content: "✓"; position: absolute; left: 0; color: var(--nsr-blue); font-weight: 800; }
+    .verify { padding: 24px; margin-top: 18px; text-align: center; } .verify h3 { margin: 0 0 6px; font-size: 22px; } .verify p { color: var(--muted); margin: 0 0 16px; }
+    .verify a.btn, .verify .btn { display: inline-block; padding: 16px 28px; font-size: 16px; font-weight: 800; color: #031019; text-decoration: none; background: linear-gradient(180deg, #51C5F4, #1597d4); border-radius: 6px; }
+    .vchecklist { display: inline-grid; gap: 8px; text-align: left; margin: 4px auto 18px; } .vcheck { color: var(--text); font-size: 14.5px; } .vcheck b { color: var(--nsr-blue); margin-right: 8px; }
     .disclaimer { color: var(--muted); font-size: 12.5px; margin-top: 18px; }
+    @media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
 
-    /* Property Intelligence Report */
-    .report-hero { margin: 6px 0 4px; }
-    .report-hero .kicker { font-size: 12.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--accent); }
-    .report-hero h2 { font-size: clamp(24px, 4.5vw, 36px); margin: 6px 0 6px; letter-spacing: -.5px; }
-    .report-hero p { color: var(--muted); margin: 0; max-width: 640px; }
-    .rsection { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; margin-top: 16px; }
-    .rsection h3 { margin: 0 0 10px; font-size: 17px; }
-    .rsection p { margin: 0; color: var(--muted); font-size: 14.5px; }
-    .ai-text { color: var(--ink); font-size: 15px; }
-    .driver { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
-    .driver:first-of-type { border-top: 0; }
-    .driver .dlabel { min-width: 120px; font-weight: 700; font-size: 14px; }
-    .driver .dval { color: var(--accent); font-weight: 700; font-size: 14px; min-width: 90px; }
-    .driver .dnote { color: var(--muted); font-size: 13.5px; }
-    .placeholder { opacity: .92; }
-    .placeholder .tag { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--muted); background: rgba(145,164,180,.12); border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px; margin-left: 8px; }
-    .placeholder ul { margin: 10px 0 0; padding-left: 18px; color: var(--muted); font-size: 13.5px; }
-    .verify { background: linear-gradient(180deg, rgba(81,197,244,.10), var(--panel)); border: 1px solid rgba(81,197,244,.30); border-radius: 16px; padding: 24px; margin-top: 18px; text-align: center; }
-    .verify h3 { margin: 0 0 6px; font-size: 22px; }
-    .verify p { color: var(--muted); margin: 0 0 16px; }
-    .verify a.btn, .verify .btn { display: inline-block; padding: 16px 28px; font-size: 16px; font-weight: 800; color: #08151e; text-decoration: none; background: linear-gradient(90deg, var(--accent), var(--accent-deep)); border-radius: 12px; }
-    .vchecklist { display: inline-grid; gap: 8px; text-align: left; margin: 4px auto 18px; }
-    .vcheck { color: var(--ink); font-size: 14.5px; }
-    .vcheck b { color: var(--accent); margin-right: 8px; }
-    ul.checklist { list-style: none; padding: 0; margin: 12px 0 0; }
-    ul.checklist li { padding: 6px 0 6px 24px; position: relative; color: var(--muted); font-size: 14px; }
-    ul.checklist li::before { content: "✓"; position: absolute; left: 0; color: var(--accent); font-weight: 800; }
+    /* ---------------- Trust strip ---------------- */
+    .trust-strip { background: var(--white); padding: 34px 0; }
+    .trust-strip .inner { max-width: 1180px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: repeat(4, 1fr); }
+    .trust-item { padding: 4px 26px; border-left: 1px solid #e6ebf1; display: flex; gap: 14px; align-items: flex-start; }
+    .trust-item:first-child { border-left: 0; }
+    .trust-item svg { color: var(--nsr-blue-dark); width: 42px; height: 42px; flex: none; }
+    .trust-item .ti-title { font-weight: 800; color: var(--light-text); font-size: 16px; }
+    .trust-item .ti-body { color: var(--light-muted); font-size: 14px; margin-top: 3px; }
+    @media (max-width: 860px) { .trust-strip .inner { grid-template-columns: repeat(2, 1fr); gap: 26px 0; } .trust-item:nth-child(3) { border-left: 0; } }
+    @media (max-width: 520px) { .trust-strip .inner { grid-template-columns: 1fr; gap: 22px; } .trust-item { border-left: 0; } }
 
-    footer { border-top: 1px solid var(--line); margin-top: 48px; background: #070b10; }
-    footer .inner { max-width: var(--maxw); margin: 0 auto; padding: 38px 24px 58px; display: grid; gap: 20px; }
-    footer .ftop { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-    footer img.flogo { height: 52px; width: auto; }
-    footer .powered { color: var(--muted); font-size: 13.5px; }
-    footer .powered b { color: var(--ink); }
-    footer .links { display: flex; gap: 20px; flex-wrap: wrap; font-size: 14px; }
-    footer a { color: var(--muted); text-decoration: none; }
-    footer a:hover { color: var(--accent); }
-    footer .legal { color: var(--muted); font-size: 12.5px; line-height: 1.6; }
-    footer b { color: var(--ink); } footer .blue { color: var(--accent); }
+    /* ---------------- How it works ---------------- */
+    .steps { background: var(--white); padding: 72px 0 86px; }
+    .steps .inner { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+    .eyebrow2 { color: var(--nsr-blue-dark); font-weight: 800; letter-spacing: .08em; font-size: 13px; text-transform: uppercase; }
+    .steps .eyebrow2 { text-align: center; display: block; }
+    .steps h2 { font-size: 36px; font-weight: 800; color: var(--light-text); text-align: center; margin: 10px 0 0; letter-spacing: -.02em; }
+    .steps-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 48px; align-items: start; }
+    .step { text-align: center; padding: 0 18px; position: relative; }
+    .step .num { width: 46px; height: 46px; border-radius: 50%; background: rgba(81,197,244,.14); color: var(--nsr-blue-dark); font-weight: 800; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; }
+    .step svg { color: var(--nsr-blue-dark); width: 40px; height: 40px; }
+    .step h3 { color: var(--light-text); font-size: 19px; font-weight: 800; margin: 14px 0 6px; }
+    .step p { color: var(--light-muted); font-size: 15px; margin: 0; }
+    .step .arrow { display: none; color: var(--nsr-blue); }
+    @media (min-width: 861px) { .step:not(:last-child) .arrow { display: block; position: absolute; top: 14px; right: -14px; } }
+    @media (max-width: 860px) { .steps-row { grid-template-columns: 1fr; gap: 38px; } .steps h2 { font-size: 28px; } }
+
+    /* ---------------- Expertise ---------------- */
+    .expertise { background: var(--white); }
+    .expertise .grid { display: grid; grid-template-columns: 1fr 1fr; }
+    .expertise .img { min-height: 480px; background-color: #0c1620;
+      background-image: linear-gradient(135deg, rgba(12,22,32,.55), rgba(22,36,47,.45)), var(--aerial-image, url('/assets/aerial-roof.jpg'));
+      background-size: cover; background-position: center; }
+    .expertise .txt { padding: 64px; }
+    .expertise h2 { font-size: 38px; font-weight: 800; color: var(--light-text); letter-spacing: -.02em; margin: 12px 0 18px; line-height: 1.08; }
+    .expertise p { color: var(--light-muted); font-size: 16px; line-height: 1.65; max-width: 520px; }
+    .checks { list-style: none; padding: 0; margin: 24px 0 0; display: grid; gap: 14px; }
+    .checks li { display: flex; align-items: center; gap: 12px; color: var(--light-text); font-weight: 600; font-size: 16px; }
+    .checks li svg { color: var(--nsr-blue-dark); width: 22px; height: 22px; flex: none; }
+    @media (max-width: 860px) { .expertise .grid { grid-template-columns: 1fr; } .expertise .img { min-height: 280px; } .expertise .txt { padding: 44px 24px; } .expertise h2 { font-size: 30px; } }
+
+    /* ---------------- Footer ---------------- */
+    .site-footer { background: var(--dark); }
+    .site-footer .inner { max-width: 1180px; margin: 0 auto; padding: 54px 24px; display: grid; grid-template-columns: 1.2fr 1.4fr 1fr; gap: 36px; align-items: start; }
+    .site-footer img.flogo { height: 64px; width: auto; }
+    .foot-statement { color: var(--muted); font-size: 15px; line-height: 1.6; } .foot-statement b { color: #fff; }
+    .foot-cta { text-align: right; }
+    .foot-phone { color: #fff; font-weight: 800; font-size: 22px; text-decoration: none; display: block; margin-bottom: 14px; } .foot-phone:hover { color: var(--nsr-blue); }
+    .foot-bottom { border-top: 1px solid var(--border); }
+    .foot-bottom .inner { max-width: 1180px; margin: 0 auto; padding: 20px 24px; display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+    .foot-bottom a { color: var(--muted); text-decoration: none; } .foot-bottom a:hover { color: var(--nsr-blue); }
+    @media (max-width: 860px) { .site-footer .inner { grid-template-columns: 1fr; gap: 26px; } .foot-cta { text-align: left; } }
   </style>
 </head>
 <body>
-  <!-- Top nav: official NSR logo + RoofNow + Powered by NSR + actions -->
-  <nav class="topnav">
+  <!-- ===== Header ===== -->
+  <header class="site-header">
     <div class="inner">
-      <a class="lockup" href="/">
-        <img src="/assets/nsr-logo.png" alt="New Standard Restoration" width="44" height="44" />
-        <div class="txt">
-          <div class="name">RoofNow</div>
-          <div class="by">Powered by <b>New Standard Restoration</b></div>
-        </div>
+      <a class="brand-lockup" href="/">
+        <img src="/assets/nsr-logo.png" alt="New Standard Restoration" />
+        <span class="brand-divider"></span>
+        <span class="wordmark"><span class="roof">ROOF</span><span class="now">NOW</span>
+          <span class="pb">Powered by New Standard Restoration</span></span>
       </a>
-      <div class="navspace"></div>
-      <div class="navbtns">
-        <a class="navbtn ghost callnow" id="callNow" href="#step1">Call Now</a>
-        <a class="navbtn solid" id="scheduleNav" href="#step1">Schedule Inspection</a>
+      <div class="header-space"></div>
+      <div class="header-right">
+        <a class="header-phone" href="tel:+12243021177">224-302-1177</a>
+        <a class="btn-schedule" href="https://newstandardrestoration.com/contact" target="_blank" rel="noopener">Schedule Inspection</a>
       </div>
     </div>
-  </nav>
+  </header>
 
-  <!-- Premium hero -->
-  <section class="hero">
-    <div class="inner">
-      <span class="eyebrow"><span class="tick"></span> Powered by New Standard Restoration</span>
-      <h1>What's Your Roof Replacement <span class="grad">Likely to Cost?</span></h1>
-      <p class="lede">Enter your address and RoofNow will estimate your roof size, pitch, and
-        replacement cost using aerial imagery, AI roof measurements, and local pricing.</p>
+  <main>
+    <!-- ===== Hero ===== -->
+    <section class="hero">
+      <div class="inner">
+        <div class="hero-col">
+          <div class="eyebrow"><span class="roof">ROOF</span><span class="now">NOW</span></div>
+          <h1>What's Your Roof<br>Replacement<br><span class="blue">Likely to Cost?</span></h1>
+          <p class="sub">Get an AI-powered roof estimate in under 30 seconds.</p>
 
-      <!-- STEP 1 — address only -->
-      <div class="tool" id="step1" style="margin-top:24px">
-        <h2 class="step">Step 1 · Your address</h2>
-        <form id="addressForm" novalidate autocomplete="off">
-          <div class="field addr-wrap">
-            <input id="address" type="text" autocomplete="off" spellcheck="false"
-                   placeholder="Start typing your property address…" />
-            <div class="suggest" id="suggest" role="listbox"></div>
-          </div>
-          <div class="addr-verified" id="addrVerified">✓ Address verified — <span id="addrVerifiedText"></span></div>
-          <button id="goBtn" type="submit" style="margin-top:14px">Get My Instant Roof Estimate</button>
-        </form>
-        <div class="examples">
-          <span class="lbl">Try:</span>
-          <span class="chip" data-addr="4150 N Rockton Ave, Rockford, IL 61103">Rockford, IL</span>
-          <span class="chip" data-addr="1600 Amphitheatre Parkway, Mountain View, CA">Mountain View, CA</span>
+          <form class="addr-form" id="addressForm" novalidate autocomplete="off">
+            <div class="addr-wrap">
+              <input id="address" type="text" autocomplete="off" spellcheck="false" placeholder="Enter your property address" />
+              <div class="suggest" id="suggest" role="listbox"></div>
+            </div>
+            <div class="addr-verified" id="addrVerified">✓ Address verified — <span id="addrVerifiedText"></span></div>
+            <button id="goBtn" type="submit">Get My Estimate →</button>
+          </form>
+          <div id="addressErr"></div>
+          <p class="secure-note">Your information is secure and never shared.</p>
         </div>
-        <div class="err" id="addressErr"></div>
-      </div>
-    </div>
-  </section>
-
-  <div class="wrap">
-
-    <!-- Trust strip -->
-    <div class="trust" style="margin-top:28px">
-      <div class="t"><span class="ic">✓</span>Licensed &amp; Insured<span class="sub">Fully credentialed roofing professionals</span></div>
-      <div class="t"><span class="ic">✓</span>Locally Owned<span class="sub">Serving Illinois &amp; Wisconsin</span></div>
-      <div class="t"><span class="ic">✓</span>5-Star Reputation<span class="sub">Trusted by homeowners across the region</span></div>
-      <div class="t"><span class="ic">✓</span>Professional Installation<span class="sub">Experienced New Standard Restoration crews</span></div>
-      <div class="t"><span class="ic">✓</span>Industry-Leading Warranty<span class="sub">Manufacturer + workmanship coverage</span></div>
-      <div class="t"><span class="ic">✓</span>Powered by New Standard Restoration<span class="sub">Every estimate verified on-site</span></div>
-    </div>
-
-    <!-- Social proof: New Standard Restoration reviews -->
-    <section class="reviews">
-      <div class="section-title">What homeowners say about New Standard Restoration</div>
-      <div class="reviews-card">
-        <script type="text/javascript" src="https://reputationhub.site/reputation/assets/review-widget.js"></script>
-        <iframe class="lc_reviews_widget" src="https://reputationhub.site/reputation/widgets/review_widget/0Jspoo5ytvW4hlNpAbaV" frameborder="0" scrolling="no" style="min-width: 100%; width: 100%;"></iframe>
       </div>
     </section>
 
-    <div id="status"><div class="spinner"></div><div id="statusText">Measuring your roof…</div></div>
+    <!-- ===== Estimate flow (revealed after address submit; not part of static homepage) ===== -->
+    <section class="flow" id="flow" aria-live="polite">
+      <div id="status"><div class="spinner"></div><div id="statusText">Measuring your roof…</div></div>
 
-    <!-- STEP 2 — teaser + unlock form -->
-    <div id="teaser">
-      <div class="teaser-card">
-        <div class="found"><span class="pin">📍</span><span id="foundText">We found your roof</span></div>
-        <div class="addr" id="teaserAddr"></div>
-
-        <div class="meta-row" id="teaserMeta"></div>
-
-        <div class="confline">
-          <span class="conf-badge" id="teaserConf">—</span>
-          <span id="teaserConfText" style="color:var(--muted);font-size:14px"></span>
+      <div id="teaser">
+        <div class="teaser-card">
+          <div class="found"><span class="pin">📍</span><span id="foundText">We found your roof</span></div>
+          <div class="addr" id="teaserAddr"></div>
+          <div class="meta-row" id="teaserMeta"></div>
+          <div class="confline">
+            <span class="conf-badge" id="teaserConf">—</span>
+            <span id="teaserConfText" style="color:var(--muted);font-size:14px"></span>
+          </div>
+          <div class="ready">✓ Your estimate is ready.</div>
+          <div class="unlock">
+            <h3>Unlock your full estimate</h3>
+            <p>Enter your details and we'll reveal your Good / Better / Best replacement pricing.</p>
+            <form id="unlockForm" novalidate>
+              <div class="grid2">
+                <div class="field"><label for="firstName">First name</label><input id="firstName" type="text" autocomplete="given-name" /></div>
+                <div class="field"><label for="lastName">Last name</label><input id="lastName" type="text" autocomplete="family-name" /></div>
+              </div>
+              <div class="grid2">
+                <div class="field"><label for="phone">Phone</label><input id="phone" type="tel" autocomplete="tel" placeholder="(224) 302-1177" /></div>
+                <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" placeholder="you@email.com" /></div>
+              </div>
+              <button id="unlockBtn" type="submit">Reveal My Good / Better / Best Pricing</button>
+            </form>
+            <div class="err" id="unlockErr"></div>
+            <p class="privacy">We use your details only to prepare your estimate and schedule your inspection. No spam.</p>
+          </div>
         </div>
-        <div class="ready">✓ Your estimate is ready.</div>
+      </div>
 
-        <div class="unlock">
-          <h3>Unlock your full estimate</h3>
-          <p>Enter your details and we'll reveal your Good / Better / Best replacement pricing.</p>
-          <form id="unlockForm" novalidate>
-            <div class="grid2">
-              <div class="field"><label for="firstName">First name</label><input id="firstName" type="text" autocomplete="given-name" /></div>
-              <div class="field"><label for="lastName">Last name</label><input id="lastName" type="text" autocomplete="family-name" /></div>
-            </div>
-            <div class="grid2">
-              <div class="field"><label for="phone">Phone</label><input id="phone" type="tel" autocomplete="tel" placeholder="(555) 123-4567" /></div>
-              <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" placeholder="you@email.com" /></div>
-            </div>
-            <button id="unlockBtn" type="submit">Reveal My Good / Better / Best Pricing</button>
-          </form>
-          <div class="err" id="unlockErr"></div>
-          <p class="privacy">We use your details only to prepare your estimate and schedule your inspection. No spam.</p>
+      <div id="result"><div id="report"></div></div>
+    </section>
+
+    <!-- ===== Trust strip ===== -->
+    <section class="trust-strip">
+      <div class="inner">
+        <div class="trust-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+          <div><div class="ti-title">Licensed &amp; Insured</div><div class="ti-body">Fully licensed roofing contractor in Illinois</div></div>
         </div>
+        <div class="trust-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8L3.5 9.7l5.9-.9L12 3z"/></svg>
+          <div><div class="ti-title">5-Star Reputation</div><div class="ti-body">Backed by real reviews from local homeowners</div></div>
+        </div>
+        <div class="trust-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="6"/><path d="M9 14l-2 7 5-3 5 3-2-7"/></svg>
+          <div><div class="ti-title">Workmanship Warranty</div><div class="ti-body">Industry-leading warranties for your peace of mind</div></div>
+        </div>
+        <div class="trust-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.5-7-11a7 7 0 0114 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+          <div><div class="ti-title">Local &amp; Trusted</div><div class="ti-body">Proudly serving Northern Illinois</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== How RoofNow Works ===== -->
+    <section class="steps">
+      <div class="inner">
+        <span class="eyebrow2">How RoofNow Works</span>
+        <h2>Get Your Estimate in 3 Simple Steps</h2>
+        <div class="steps-row">
+          <div class="step">
+            <div class="num">1</div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.5-7-11a7 7 0 0114 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            <h3>Enter Address</h3>
+            <p>Enter your property address and we'll find your home.</p>
+            <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="26" height="26"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+          <div class="step">
+            <div class="num">2</div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>
+            <h3>AI Analysis</h3>
+            <p>Our AI analyzes your roof size, pitch, and complexity.</p>
+            <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="26" height="26"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </div>
+          <div class="step">
+            <div class="num">3</div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l3 3v17l-3-2-3 2-3-2-3 2V2z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+            <h3>Instant Estimate</h3>
+            <p>Get your estimated replacement cost in seconds.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Technology / Local Expertise ===== -->
+    <section class="expertise">
+      <div class="grid">
+        <div class="img" role="img" aria-label="Aerial view of a home roof"></div>
+        <div class="txt">
+          <span class="eyebrow2">Why Homeowners Trust RoofNow</span>
+          <h2>Powerful Technology.<br>Local Expertise.</h2>
+          <p>Our AI technology is powerful, but our local expertise makes the difference. Every estimate is
+            backed by real-world experience from roofing professionals who know your area.</p>
+          <ul class="checks">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> AI-Powered Accuracy</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Real-Time Local Pricing</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Expert Verification</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> No-Obligation Inspection</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== Footer ===== -->
+  <footer class="site-footer">
+    <div class="inner">
+      <div><img class="flogo" src="/assets/nsr-logo.png" alt="New Standard Restoration" loading="lazy" /></div>
+      <div class="foot-statement">
+        <b>Setting a new standard of ethics in the roofing industry.</b><br>
+        Quality work. Honest people. Every time.
+      </div>
+      <div class="foot-cta">
+        <a class="foot-phone" href="tel:+12243021177">224-302-1177</a>
+        <a class="btn-schedule" href="https://newstandardrestoration.com/contact" target="_blank" rel="noopener">Schedule Free Inspection</a>
       </div>
     </div>
-
-    <!-- STEP 3 — Property Intelligence Report -->
-    <div id="result"><div id="report"></div></div>
-  </div>
-
-  <footer>
-    <div class="inner">
-      <div class="ftop">
-        <img class="flogo" src="/assets/nsr-logo.png" alt="New Standard Restoration" loading="lazy" />
-        <div class="powered"><b class="blue">RoofNow</b> is powered by <b>New Standard Restoration</b><br>
-          Roofing &amp; Siding Experts in Illinois &amp; Wisconsin</div>
-      </div>
-      <div class="links">
-        <a id="footPhone" href="#step1">Call us</a>
-        <a href="https://newstandardrestoration.com" target="_blank" rel="noopener">newstandardrestoration.com</a>
-        <a href="#step1">Schedule Inspection</a>
+    <div class="foot-bottom">
+      <div class="inner">
+        <span>© 2025 New Standard Restoration. All rights reserved.</span>
+        <span style="flex:1"></span>
         <a href="https://newstandardrestoration.com" target="_blank" rel="noopener">Privacy Policy</a>
-        <a href="https://newstandardrestoration.com" target="_blank" rel="noopener">Terms</a>
-      </div>
-      <div class="legal">
-        © <span id="yr"></span> New Standard Restoration. All rights reserved. ·
-        Powered by New Standard Restoration · Instant estimates are budgetary and subject to field verification.
+        <a href="https://newstandardrestoration.com" target="_blank" rel="noopener">Terms of Service</a>
       </div>
     </div>
   </footer>
@@ -353,7 +389,6 @@
     const $ = (id) => document.getElementById(id);
     const show = (el) => el.classList.add("show");
     const hide = (el) => el.classList.remove("show");
-    const fmtPct = (n) => (n == null ? "—" : n + "%");
 
     let foundAddress = null;   // normalized address from the preview (used for the lead)
     let selectedLoc = null;    // {lat, lng, description} once an autocomplete suggestion is picked
@@ -368,15 +403,11 @@
       show($("status"));
       $("statusText").textContent = "Measuring your roof from aerial imagery…";
       try {
-        // Prefer the exact lat/lng from the picked address — most accurate.
         const url = selectedLoc
           ? `/api/quote_preview?lat=${selectedLoc.lat}&lng=${selectedLoc.lng}&address=${encodeURIComponent(selectedLoc.description || address)}`
           : "/api/quote_preview?address=" + encodeURIComponent(address);
         const r = await fetch(url);
-        if (!r.ok) {
-          const e = await r.json().catch(() => ({}));
-          throw new Error(e.error || ("Request failed (" + r.status + ")"));
-        }
+        if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || ("Request failed (" + r.status + ")")); }
         renderTeaser(await r.json());
         hide($("status"));
         show($("teaser"));
@@ -393,29 +424,18 @@
       foundAddress = p.address || $("address").value.trim();
       $("foundText").textContent = p.headline || "We found your roof";
       $("teaserAddr").textContent = foundAddress;
-
-      const meta = $("teaserMeta");
-      meta.innerHTML = "";
+      const meta = $("teaserMeta"); meta.innerHTML = "";
       const facts = [];
       const sq = p.roof && p.roof.total_squares;
       if (sq) facts.push(["~" + Math.round(sq * 100).toLocaleString() + " ft²", "Roof area"]);
       if (p.roof && p.roof.predominant_pitch) facts.push([p.roof.predominant_pitch, "Pitch"]);
       if (p.roof && p.roof.structure_complexity) facts.push([p.roof.structure_complexity, "Complexity"]);
-      facts.forEach(([v, l]) => {
-        const d = document.createElement("div");
-        d.className = "meta";
-        d.innerHTML = '<div class="v">' + v + '</div><div class="l">' + l + "</div>";
-        meta.appendChild(d);
-      });
-
+      facts.forEach(([v, l]) => { const d = document.createElement("div"); d.className = "meta"; d.innerHTML = '<div class="v">' + v + '</div><div class="l">' + l + "</div>"; meta.appendChild(d); });
       const c = p.confidence || {};
-      const b = $("teaserConf");
-      b.textContent = c.level || "Estimate Confidence";
-      b.className = "conf-badge " + confClass(c);
+      const b = $("teaserConf"); b.textContent = c.level || "Estimate Confidence"; b.className = "conf-badge " + confClass(c);
       $("teaserConfText").textContent = c.accuracy_text ? "Expected pricing accuracy " + c.accuracy_text : "";
     }
 
-    // Estimate-confidence level -> badge color class.
     function confClass(c) {
       const l = String((c && (c.headline || c.level)) || "").toLowerCase();
       if (l.indexOf("excellent") >= 0 || l.indexOf("very good") >= 0) return "conf-high";
@@ -442,20 +462,14 @@
       $("unlockBtn").disabled = true;
       show($("status"));
       $("statusText").textContent = "Calculating your Good / Better / Best pricing…";
-
       const body = {
-        first_name: $("firstName").value.trim(),
-        last_name: $("lastName").value.trim(),
-        phone: $("phone").value.trim(),
-        email: $("email").value.trim(),
+        first_name: $("firstName").value.trim(), last_name: $("lastName").value.trim(),
+        phone: $("phone").value.trim(), email: $("email").value.trim(),
         address: foundAddress || (selectedLoc && selectedLoc.description) || $("address").value.trim(),
-        lat: selectedLoc ? selectedLoc.lat : undefined,
-        lng: selectedLoc ? selectedLoc.lng : undefined,
+        lat: selectedLoc ? selectedLoc.lat : undefined, lng: selectedLoc ? selectedLoc.lng : undefined,
       };
       try {
-        const r = await fetch("/api/lead", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-        });
+        const r = await fetch("/api/lead", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
         const data = await r.json().catch(() => ({}));
         if (!r.ok) { $("unlockErr").textContent = (data.errors || [data.error || "Please check your details."]).join(" "); return; }
         hide($("status"));
@@ -475,232 +489,123 @@
       }
     }
 
-    // Set to your NSR scheduling link (e.g. Calendly) to make the CTA bookable.
-    const BOOKING_URL = "";
+    // Every inspection-related CTA points here.
+    const BOOKING_URL = "https://newstandardrestoration.com/contact";
     const esc2 = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
 
     function renderReport(rep, firstName) {
-      const c = rep.confidence || {};
-      const q = rep.quote || {};
-      const pr = q.price_range || {};
-      const snap = rep.roof_snapshot || {};
-      const sum = rep.ai_summary || {};
-      const pe = rep.price_explanation || {};
-      const rh = rep.roof_health || {};
-      const se = rep.storm_exposure || {};
-      const nx = rep.recommended_next_step || {};
+      const c = rep.confidence || {}, q = rep.quote || {}, pr = q.price_range || {};
+      const snap = rep.roof_snapshot || {}, sum = rep.ai_summary || {}, pe = rep.price_explanation || {};
+      const rh = rep.roof_health || {}, se = rep.storm_exposure || {}, nx = rep.recommended_next_step || {};
       const html = [];
-
-      // Hero
-      html.push('<div class="report-hero">' +
-        '<div class="kicker">RoofNow · Powered by New Standard Restoration</div>' +
+      html.push('<div class="report-hero"><div class="kicker">RoofNow · Powered by New Standard Restoration</div>' +
         "<h2>" + (firstName ? esc2(firstName) + ", your" : "Your") + " Roof Intelligence Report is Ready</h2>" +
         "<p>" + esc2((rep.brand && rep.brand.subheadline) || "") + "</p></div>");
-
-      // Property + estimate headline
-      html.push('<div class="headline-range" style="margin-top:16px">' +
-        '<div class="label">Your estimated roof replacement</div>' +
+      html.push('<div class="headline-range" style="margin-top:16px"><div class="label">Your estimated roof replacement</div>' +
         '<div class="big">' + esc2(pr.display || "Estimate pending inspection") + "</div>" +
         '<div class="addr">' + esc2((rep.property && rep.property.address) || foundAddress || "") + "</div>" +
         '<div class="confline" style="margin-top:12px"><span class="conf-badge ' + confClass(c) + '">' +
-          esc2((c.label || "Estimate Confidence") + ": " + (c.headline || "")) + "</span>" +
-          '<span style="color:var(--muted);font-size:14px">Expected pricing accuracy ' + esc2(c.accuracy_text || "") + "</span></div>" +
-        "</div>");
-
-      // Financing teaser (admin-configured, display-only)
+        esc2((c.label || "Estimate Confidence") + ": " + (c.headline || "")) + "</span>" +
+        '<span style="color:var(--muted);font-size:14px">Expected pricing accuracy ' + esc2(c.accuracy_text || "") + "</span></div></div>");
       const fin = rep.financing;
-      if (fin && fin.text) {
-        html.push('<div class="rsection" style="text-align:center"><h3 style="margin:0;color:var(--accent)">' + esc2(fin.text) + "</h3></div>");
-      }
-      // Service-area note (only when flagged out of area)
+      if (fin && fin.text) html.push('<div class="rsection" style="text-align:center"><h3 style="margin:0;color:var(--nsr-blue)">' + esc2(fin.text) + "</h3></div>");
       const sa = rep.service_area;
-      if (sa && sa.in_area === false && sa.message) {
-        html.push('<div class="rsection"><p>' + esc2(sa.message) + "</p></div>");
-      }
-
-      // Roof snapshot
+      if (sa && sa.in_area === false && sa.message) html.push('<div class="rsection"><p>' + esc2(sa.message) + "</p></div>");
       const cards = [];
       if (snap.total_sloped_sqft) cards.push(["~" + snap.total_sloped_sqft.toLocaleString() + " ft²", "Roof area"]);
       if (snap.total_squares) cards.push([Math.round(snap.total_squares) + " sq", "Roofing squares"]);
       if (snap.predominant_pitch) cards.push([snap.predominant_pitch, "Pitch"]);
       if (snap.structure_complexity) cards.push([snap.structure_complexity, "Complexity"]);
       if (snap.facet_count) cards.push([snap.facet_count, "Roof faces"]);
-      if (cards.length) {
-        html.push('<div class="rsection"><h3>Roof snapshot</h3><div class="meta-row">' +
-          cards.map(([v, l]) => '<div class="meta"><div class="v">' + esc2(v) + '</div><div class="l">' + esc2(l) + "</div></div>").join("") +
-          "</div></div>");
-      }
-
-      // AI summary
+      if (cards.length) html.push('<div class="rsection"><h3>Roof snapshot</h3><div class="meta-row">' +
+        cards.map(([v, l]) => '<div class="meta"><div class="v">' + esc2(v) + '</div><div class="l">' + esc2(l) + "</div></div>").join("") + "</div></div>");
       if (sum.text) html.push('<div class="rsection"><h3>AI summary</h3><p class="ai-text">' + esc2(sum.text) + "</p></div>");
-
-      // Estimate Confidence (customer model — success framing, no failure language)
-      if (c.message) {
-        html.push('<div class="rsection"><h3>' + esc2(c.label || "Estimate Confidence") +
-          " — " + esc2(c.level || "") + "</h3><p>" + esc2(c.message) + "</p></div>");
-      }
-
-      // Pricing tiers
-      if (q.estimates && q.estimates.length) {
-        html.push('<div class="section-title">Your package options</div><div class="tiers">' +
-          q.estimates.map((t) => {
-            const f = t.key === "better";
-            return '<div class="tier' + (f ? " featured" : "") + '">' +
-              (f ? '<span class="pop">Most popular</span>' : "") +
-              "<h3>" + esc2(t.name) + "</h3><div class=\"blurb\">" + esc2(t.blurb) + "</div>" +
-              '<div class="price">' + esc2(t.price_display) + "</div>" +
-              '<div class="persq">' + (t.price_per_square ? "~$" + t.price_per_square.toLocaleString() + " / square installed" : "") + "</div>" +
-              "<ul>" + (t.features || []).map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul></div>";
-          }).join("") + "</div>");
-      }
-
-      // Why this estimate
-      if (pe.drivers && pe.drivers.length) {
-        html.push('<div class="rsection"><h3>' + esc2(pe.headline || "Why this estimate?") + "</h3>" +
-          '<p style="margin-bottom:10px">' + esc2(pe.basis || "") + "</p>" +
-          pe.drivers.map((d) => '<div class="driver"><div class="dlabel">' + esc2(d.label) + '</div><div class="dval">' + esc2(d.value) + '</div><div class="dnote">' + esc2(d.note || "") + "</div></div>").join("") +
-          "</div>");
-      }
-
-      // Roof health — value-add ("what we'll verify")
+      if (c.message) html.push('<div class="rsection"><h3>' + esc2(c.label || "Estimate Confidence") + " — " + esc2(c.level || "") + "</h3><p>" + esc2(c.message) + "</p></div>");
+      if (q.estimates && q.estimates.length) html.push('<div class="section-title">Your package options</div><div class="tiers">' +
+        q.estimates.map((t) => { const f = t.key === "better"; return '<div class="tier' + (f ? " featured" : "") + '">' + (f ? '<span class="pop">Most popular</span>' : "") +
+          "<h3>" + esc2(t.name) + "</h3><div class=\"blurb\">" + esc2(t.blurb) + "</div><div class=\"price\">" + esc2(t.price_display) + "</div>" +
+          '<div class="persq">' + (t.price_per_square ? "~$" + t.price_per_square.toLocaleString() + " / square installed" : "") + "</div>" +
+          "<ul>" + (t.features || []).map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul></div>"; }).join("") + "</div>");
+      if (pe.drivers && pe.drivers.length) html.push('<div class="rsection"><h3>' + esc2(pe.headline || "Why this estimate?") + "</h3><p style=\"margin-bottom:10px\">" + esc2(pe.basis || "") + "</p>" +
+        pe.drivers.map((d) => '<div class="driver"><div class="dlabel">' + esc2(d.label) + '</div><div class="dval">' + esc2(d.value) + '</div><div class="dnote">' + esc2(d.note || "") + "</div></div>").join("") + "</div>");
       html.push('<div class="rsection"><h3>' + esc2(rh.headline || "What we'll verify during your free roof assessment") + "</h3><p>" + esc2(rh.message || "") + "</p>" +
         (rh.checklist ? '<ul class="checklist">' + rh.checklist.map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul>" : "") + "</div>");
-
-      // Storm & damage review — value-add
       html.push('<div class="rsection"><h3>' + esc2(se.headline || "Storm & damage review") + "</h3><p>" + esc2(se.message || "") + "</p></div>");
-
-      // Verification CTA — links to BOOKING_URL when configured; otherwise the
-      // lead is already captured and NSR reaches out, so show a confirmation.
       const cta = nx.cta_label || "Schedule Free Roof Verification";
       const checklist = (nx.checklist || []).map((x) => '<div class="vcheck"><b>✓</b>' + esc2(x) + "</div>").join("");
-      const btn = BOOKING_URL
-        ? '<a class="btn" href="' + esc2(BOOKING_URL) + '" target="_blank" rel="noopener">' + esc2(cta) + "</a>"
-        : '<div class="btn" style="cursor:default">✓ ' + esc2(cta) + " requested</div>" +
-          '<p style="margin-top:12px">New Standard Restoration will call you shortly to schedule.</p>';
+      const btn = '<a class="btn" href="' + esc2(BOOKING_URL) + '" target="_blank" rel="noopener">' + esc2(cta) + "</a>";
       html.push('<div class="verify"><h3>' + esc2(nx.headline || "Your estimate is ready") + "</h3><p>" + esc2(nx.body || "") + "</p>" +
         (checklist ? '<div class="vchecklist">' + checklist + "</div>" : "") + btn +
         (nx.free_no_obligation ? '<p style="margin-top:12px;font-size:13px">' + esc2(nx.free_no_obligation) + "</p>" : "") + "</div>");
-
-      // Disclaimer
       if (rep.disclaimer) html.push('<p class="disclaimer">' + esc2(rep.disclaimer) + "</p>");
-
       $("report").innerHTML = html.join("");
     }
 
     // ---- wiring ----
     $("addressForm").addEventListener("submit", (e) => { e.preventDefault(); runPreview(); });
     $("unlockForm").addEventListener("submit", (e) => { e.preventDefault(); unlock(); });
-    document.querySelectorAll(".chip").forEach((c) =>
-      c.addEventListener("click", () => { setAddress(c.dataset.addr, null); runPreview(); })
-    );
-
-    // ---- NSR contact / nav wiring ----
-    // Set NSR_PHONE to enable click-to-call (e.g. "+18155551234"); blank = scroll to form.
-    const NSR_PHONE = "";
-    (function () {
-      const y = $("yr"); if (y) y.textContent = String(new Date().getFullYear());
-      const goForm = (e) => {
-        if (e) e.preventDefault();
-        const s = $("step1"); if (s) s.scrollIntoView({ behavior: "smooth", block: "center" });
-        const a = $("address"); if (a) setTimeout(() => a.focus(), 350);
-      };
-      function wirePhone(el) {
-        if (!el) return;
-        if (NSR_PHONE) { el.setAttribute("href", "tel:" + NSR_PHONE); if (el.id === "footPhone") el.textContent = "Call " + NSR_PHONE; }
-        else { el.addEventListener("click", goForm); }
-      }
-      wirePhone($("callNow")); wirePhone($("footPhone"));
-      const sn = $("scheduleNav"); if (sn) sn.addEventListener("click", goForm);
-    })();
 
     // ---------- Address autocomplete: Google Places (server-suggest fallback) ----------
     const addr = $("address");
     const suggestBox = $("suggest");
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
-    // Continental US (lower-48) — bias + restrict suggestions.
     const CONUS = { south: 24.396, west: -125.0, north: 49.384, east: -66.93 };
     let mapsReady = false, fallbackSuggest = false, suggestTimer = null;
 
     function setAddress(text, loc) {
-      addr.value = text || "";
-      selectedLoc = loc;
+      addr.value = text || ""; selectedLoc = loc;
       const v = $("addrVerified");
-      if (loc) { $("addrVerifiedText").textContent = text; v.classList.add("show"); }
-      else { v.classList.remove("show"); }
+      if (loc) { $("addrVerifiedText").textContent = text; v.classList.add("show"); } else { v.classList.remove("show"); }
     }
 
-    // Load the browser Maps key from the server, then Google Maps JS (Places).
     (async () => {
       try {
         const cfg = await (await fetch("/api/config")).json();
-        if (cfg && cfg.maps_browser_key) loadGoogleMaps(cfg.maps_browser_key);
-        else fallbackSuggest = true;
+        if (cfg && cfg.maps_browser_key) loadGoogleMaps(cfg.maps_browser_key); else fallbackSuggest = true;
       } catch { fallbackSuggest = true; }
     })();
 
     function loadGoogleMaps(key) {
       window.__initPlaces = initPlaces;
       const s = document.createElement("script");
-      s.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key)
-        + "&libraries=places&loading=async&region=US&callback=__initPlaces";
+      s.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(key) + "&libraries=places&loading=async&region=US&callback=__initPlaces";
       s.async = true; s.onerror = () => { fallbackSuggest = true; };
       document.head.appendChild(s);
     }
 
     function initPlaces() {
       mapsReady = true;
-      const bounds = new google.maps.LatLngBounds(
-        new google.maps.LatLng(CONUS.south, CONUS.west),
-        new google.maps.LatLng(CONUS.north, CONUS.east));
-      const ac = new google.maps.places.Autocomplete(addr, {
-        fields: ["geometry", "formatted_address", "address_components"],
-        componentRestrictions: { country: "us" },
-        bounds, strictBounds: true,
-        types: ["address"],
-      });
+      const bounds = new google.maps.LatLngBounds(new google.maps.LatLng(CONUS.south, CONUS.west), new google.maps.LatLng(CONUS.north, CONUS.east));
+      const ac = new google.maps.places.Autocomplete(addr, { fields: ["geometry", "formatted_address", "address_components"], componentRestrictions: { country: "us" }, bounds, strictBounds: true, types: ["address"] });
       ac.addListener("place_changed", () => {
         const p = ac.getPlace();
-        if (!p || !p.geometry || !p.geometry.location) return;   // require a real, full address pick
+        if (!p || !p.geometry || !p.geometry.location) return;
         const lat = p.geometry.location.lat(), lng = p.geometry.location.lng();
-        setAddress(p.formatted_address || addr.value.trim(),
-                   { lat, lng, description: p.formatted_address || addr.value.trim() });
+        setAddress(p.formatted_address || addr.value.trim(), { lat, lng, description: p.formatted_address || addr.value.trim() });
       });
     }
 
-    // Editing the field invalidates any prior pick.
     addr.addEventListener("input", () => {
       if (selectedLoc) setAddress(addr.value, null);
-      if (mapsReady || !fallbackSuggest) return;       // Google Places handles type-ahead
-      const q = addr.value.trim();
-      clearTimeout(suggestTimer);
+      if (mapsReady || !fallbackSuggest) return;
+      const q = addr.value.trim(); clearTimeout(suggestTimer);
       if (q.length < 3) { hideSuggest(); return; }
       suggestTimer = setTimeout(() => fetchSuggest(q), 300);
     });
     addr.addEventListener("keydown", (e) => {
       if (mapsReady || !fallbackSuggest) return;
-      if (e.key === "Enter" && suggestBox.classList.contains("show") && suggestBox.firstElementChild) {
-        e.preventDefault(); suggestBox.firstElementChild.click();
-      } else if (e.key === "Escape") { hideSuggest(); }
+      if (e.key === "Enter" && suggestBox.classList.contains("show") && suggestBox.firstElementChild) { e.preventDefault(); suggestBox.firstElementChild.click(); }
+      else if (e.key === "Escape") { hideSuggest(); }
     });
-    document.addEventListener("click", (e) => {
-      if (e.target !== addr && !suggestBox.contains(e.target)) hideSuggest();
-    });
+    document.addEventListener("click", (e) => { if (e.target !== addr && !suggestBox.contains(e.target)) hideSuggest(); });
 
     async function fetchSuggest(q) {
-      try {
-        const data = await (await fetch("/api/suggest?q=" + encodeURIComponent(q))).json();
-        renderSuggest(data.suggestions || []);
-      } catch { hideSuggest(); }
+      try { const data = await (await fetch("/api/suggest?q=" + encodeURIComponent(q))).json(); renderSuggest(data.suggestions || []); } catch { hideSuggest(); }
     }
     function renderSuggest(items) {
       if (!items.length) { hideSuggest(); return; }
-      suggestBox.innerHTML = items.map((s) =>
-        `<div class="suggest-item" role="option">${esc(s.description)}</div>`).join("");
-      [...suggestBox.children].forEach((el, i) =>
-        el.addEventListener("click", () => {
-          setAddress(items[i].description, { lat: items[i].lat, lng: items[i].lng, description: items[i].description });
-          hideSuggest();
-        }));
+      suggestBox.innerHTML = items.map((s) => `<div class="suggest-item" role="option">${esc(s.description)}</div>`).join("");
+      [...suggestBox.children].forEach((el, i) => el.addEventListener("click", () => { setAddress(items[i].description, { lat: items[i].lat, lng: items[i].lng, description: items[i].description }); hideSuggest(); }));
       suggestBox.classList.add("show");
     }
     function hideSuggest() { suggestBox.classList.remove("show"); suggestBox.innerHTML = ""; }
