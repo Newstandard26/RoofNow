@@ -36,9 +36,12 @@ prefixes / out-of-area message).
 - `ADMIN_TOKEN_SECRET` — optional; defaults to `ADMIN_PASSWORD`
 
 ## Supabase
+Project: **RoofNow** (`xquydcadsqhjrclroqkp`) →
+`https://xquydcadsqhjrclroqkp.supabase.co`.
 Table `public.pricing_config` (migration `create_pricing_config`), RLS enabled
 with **no policies** so only the service role (server) can read/write. Seeded
-with one active `seed-default` row (placeholder defaults).
+with one active `seed-default` row (placeholder defaults). The new-format
+**secret key** (`sb_secret_…`) is the `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Future (Phase 3.1+)
 The append-only history + Estimate Confidence "pricing freshness" hook lay the
