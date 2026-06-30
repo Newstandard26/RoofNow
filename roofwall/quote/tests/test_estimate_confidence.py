@@ -55,3 +55,10 @@ def test_demo_or_no_area_is_manual_review():
 def test_weights_sum_to_one():
     from roofwall.quote.estimate_confidence import WEIGHTS
     assert round(sum(WEIGHTS.values()), 6) == 1.0
+
+
+def test_attom_confirmation_lifts_score():
+    base = assess_estimate(_live()).score
+    r = _live()
+    r["attom"] = {"building_sqft": 2400, "year_built": 1998}
+    assert assess_estimate(r).score >= base   # ATTOM corroboration never lowers it

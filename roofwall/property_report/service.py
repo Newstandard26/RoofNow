@@ -112,6 +112,18 @@ def build_property_report(
     if not report:
         return _manual_review_report(address, lead)
 
+    # ATTOM property enrichment (best-effort, once per report). Injected into the
+    # report dict BEFORE build_quote so Estimate Confidence can use it.
+    attom = None
+    try:
+        from roofwall.sources.attom import fetch_property_facts
+        attom = fetch_property_facts(report.get("address") or address)
+        if attom:
+            report["attom"] = attom
+    except Exception as exc:  # noqa: BLE001
+        import sys
+        print(f"[report] attom enrichment skipped: {exc}", file=sys.stderr)
+
     quote = build_quote(report)
     confidence = quote.get("confidence") or {}        # customer Estimate Confidence
     reliable = bool(confidence.get("reliable", True))
@@ -133,6 +145,7 @@ def build_property_report(
         },
         "financing": quote.get("financing"),
         "service_area": quote.get("service_area"),
+        "property_details": attom,
         "roof_health": build_roof_health(report),
         "storm_exposure": build_storm_exposure(report),
         "recommended_next_step": build_recommendation(confidence, found=reliable),

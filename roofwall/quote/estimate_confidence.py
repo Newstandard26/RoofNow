@@ -157,7 +157,13 @@ def assess_estimate(report: Dict[str, Any], *, pricing_complete: bool = True,
     # 5) Regional pricing freshness.
     regional_s = max(0.0, min(1.0, regional_freshness))
     # 6) Building identification — did we lock onto a building footprint.
-    building_s = 0.9 if facet_count else 0.7
+    #    ATTOM confirming a real property (building size on record) corroborates it.
+    attom = report.get("attom") or {}
+    attom_confirms = bool(attom.get("building_sqft") or attom.get("year_built"))
+    if attom_confirms:
+        building_s = 1.0
+    else:
+        building_s = 0.9 if facet_count else 0.7
 
     factors = {
         "roof_area": area,
