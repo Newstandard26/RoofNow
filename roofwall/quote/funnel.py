@@ -90,8 +90,14 @@ def lead_to_webhook_payload(
         "captured_by_agent": "Form",
         "service_needed": "Roof Replacement",
         "lead_type": "Residential",
-        "property_type": "Single-Family",
+        "property_type": lead.get("property_type") or "Single-Family",
         "pipeline_stage": "New Lead",
+        # ATTOM property enrichment (present only when ATTOM returned facts)
+        "property_year_built": lead.get("property_year_built"),
+        "property_sqft": lead.get("property_sqft"),
+        "property_roof_cover": lead.get("property_roof_cover"),
+        "property_stories": lead.get("property_stories"),
+        "property_owner": lead.get("property_owner"),
         "notes": " | ".join(_summary_lines(lead, quote)),
     }
 
@@ -113,6 +119,14 @@ def _summary_lines(lead: Dict[str, Any], quote: Optional[Dict[str, Any]]) -> Lis
     ]
     if lead.get("tier"):
         lines.append(f"Interested in: {str(lead['tier']).title()} package")
+    prop = [
+        (f"Built {lead['property_year_built']}" if lead.get("property_year_built") else None),
+        (f"{int(lead['property_sqft']):,} sqft" if lead.get("property_sqft") else None),
+        (f"{lead['property_roof_cover']} roof" if lead.get("property_roof_cover") else None),
+    ]
+    prop = [x for x in prop if x]
+    if prop:
+        lines.append("Property: " + " · ".join(prop))
     if quote:
         pr = quote.get("price_range") or {}
         if pr.get("display"):

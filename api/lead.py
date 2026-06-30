@@ -112,6 +112,16 @@ class handler(BaseHTTPRequestHandler):
             lead["estimate_low"] = fq["price_range"].get("low")
             lead["estimate_high"] = fq["price_range"].get("high")
 
+        # Attach ATTOM property facts to the lead so the CRM gets full context.
+        pd = (report or {}).get("property_details") or {}
+        if pd:
+            lead["property_year_built"] = pd.get("year_built")
+            lead["property_sqft"] = pd.get("building_sqft")
+            lead["property_roof_cover"] = pd.get("roof_cover")
+            lead["property_stories"] = pd.get("stories")
+            lead["property_owner"] = pd.get("owner")
+            lead["property_type"] = lead.get("property_type") or pd.get("property_type")
+
         print(f"[lead] {json.dumps(lead)}")
         funnel_lead(lead, fq)
 

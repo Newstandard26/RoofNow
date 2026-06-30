@@ -533,6 +533,18 @@
       if (snap.facet_count) cards.push([snap.facet_count, "Roof faces"]);
       if (cards.length) left.push('<div class="rsection"><h3>Roof snapshot</h3><div class="meta-row">' +
         cards.map(([v, l]) => '<div class="meta"><div class="v">' + esc2(v) + '</div><div class="l">' + esc2(l) + "</div></div>").join("") + "</div></div>");
+      // Property details (ATTOM enrichment)
+      const pd = rep.property_details;
+      if (pd) {
+        const pcards = [];
+        if (pd.year_built) pcards.push([pd.year_built, "Year built"]);
+        if (pd.building_sqft) pcards.push(["~" + Number(pd.building_sqft).toLocaleString() + " ft²", "Home size"]);
+        if (pd.stories) pcards.push([pd.stories, "Stories"]);
+        if (pd.roof_cover) pcards.push([pd.roof_cover, "Roof material"]);
+        if (pcards.length) left.push('<div class="rsection"><h3>Property details</h3><div class="meta-row">' +
+          pcards.map(([v, l]) => '<div class="meta"><div class="v">' + esc2(v) + '</div><div class="l">' + esc2(l) + "</div></div>").join("") +
+          '</div><p style="color:var(--muted);font-size:11px;margin-top:8px">Source: ATTOM property data</p></div>');
+      }
       if (sum.text) left.push('<div class="rsection"><h3>AI summary</h3><p class="ai-text">' + esc2(sum.text) + "</p></div>");
       if (c.message) left.push('<div class="rsection"><h3>' + esc2(c.label || "Estimate Confidence") + " — " + esc2(c.level || "") + "</h3><p>" + esc2(c.message) + "</p></div>");
       if (pe.drivers && pe.drivers.length) left.push('<div class="rsection"><h3>' + esc2(pe.headline || "Why this estimate?") + "</h3><p style=\"margin-bottom:10px\">" + esc2(pe.basis || "") + "</p>" +

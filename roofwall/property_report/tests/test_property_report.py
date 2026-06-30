@@ -103,6 +103,28 @@ def test_build_report_full(monkeypatch):
     assert "subject to field verification" in r["disclaimer"]
 
 
+def test_build_report_includes_attom_property_details(monkeypatch):
+    import roofwall.app as app
+    import roofwall.sources.attom as attom
+    monkeypatch.setattr(app, "measure_address", lambda **k: _report())
+    monkeypatch.setattr(attom, "fetch_property_facts",
+                        lambda address, **k: {"year_built": 1998, "building_sqft": 2400,
+                                              "roof_cover": "Asphalt", "stories": "2",
+                                              "owner": "Jane Roof", "source": "attom"})
+    r = build_property_report("123 Main St")
+    assert r["property_details"]["year_built"] == 1998
+    assert r["property_details"]["roof_cover"] == "Asphalt"
+
+
+def test_build_report_without_attom_key(monkeypatch):
+    import roofwall.app as app
+    monkeypatch.delenv("ATTOM_API_KEY", raising=False)
+    monkeypatch.setattr(app, "measure_address", lambda **k: _report())
+    r = build_property_report("123 Main St")
+    assert r["property_details"] is None      # gracefully absent
+    assert r["status"] == "estimated"
+
+
 def test_build_report_manual_review_when_measure_fails(monkeypatch):
     import roofwall.app as app
     def boom(**k):
