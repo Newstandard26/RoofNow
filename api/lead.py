@@ -18,6 +18,7 @@ import json
 import os
 import sys
 from http.server import BaseHTTPRequestHandler
+from urllib.parse import urlencode
 
 # Make the repo-root `roofwall` package importable from /api.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir))
@@ -111,6 +112,20 @@ class handler(BaseHTTPRequestHandler):
         if fq and fq.get("price_range") and not lead.get("estimate_low"):
             lead["estimate_low"] = fq["price_range"].get("low")
             lead["estimate_high"] = fq["price_range"].get("high")
+
+        # Auto-generate the branded proposal link for this lead (customer + CRM).
+        pq = {"address": lead["address"], "first_name": lead.get("first_name", ""),
+              "last_name": lead.get("last_name", ""), "email": lead.get("email", ""),
+              "phone": lead.get("phone", "")}
+        latf, lngf = _to_float(payload.get("lat")), _to_float(payload.get("lng"))
+        if latf is not None and lngf is not None:
+            pq["lat"], pq["lng"] = latf, lngf
+        qs = urlencode({k: v for k, v in pq.items() if v not in ("", None)})
+        host = self.headers.get("host") or os.environ.get("PUBLIC_HOST", "")
+        base = f"https://{host}" if host else ""
+        lead["proposal_url"] = f"{base}/api/proposal?{qs}"      # absolute for the CRM/email
+        if isinstance(report, dict):
+            report["proposal_url"] = f"/api/proposal?{qs}"       # relative is fine in-browser
 
         # Attach ATTOM property facts to the lead so the CRM gets full context.
         pd = (report or {}).get("property_details") or {}
