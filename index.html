@@ -562,6 +562,8 @@
       right.push('<div class="verify">' + '<h3>' + esc2(nx.headline || "Your estimate is ready") + "</h3><p>" + esc2(nx.body || "") + "</p>" +
         (checklist ? '<div class="vchecklist">' + checklist + "</div>" : "") + btn +
         (nx.free_no_obligation ? '<p style="margin-top:12px;font-size:13px">' + esc2(nx.free_no_obligation) + "</p>" : "") + "</div>");
+      if (rep.proposal_url) right.push('<div class="verify" style="padding:18px"><p style="margin:0 0 12px">Get your full branded proposal to review and sign.</p>' +
+        '<a class="btn" href="' + esc2(rep.proposal_url) + '" target="_blank" rel="noopener">Download Your Proposal (PDF)</a></div>');
 
       // FULL WIDTH: verification details + storm review + disclaimer
       full.push('<div class="rsection"><h3>' + esc2(rh.headline || "What we'll verify during your free roof assessment") + "</h3><p>" + esc2(rh.message || "") + "</p>" +

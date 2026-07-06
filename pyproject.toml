@@ -25,6 +25,10 @@ dependencies = [
     "contourpy>=1.2",
     "shapely>=2.0",
     "PyMaxflow>=1.3.0",
+    # reportlab powers the branded roof-proposal PDF (api/proposal.py). Must be a
+    # base dep so Vercel installs it into the serverless function (already locked
+    # in uv.lock via the `report` extra). ~3 MB.
+    "reportlab>=4.0",
 ]
 
 [project.optional-dependencies]

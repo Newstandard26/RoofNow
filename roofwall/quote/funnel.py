@@ -98,6 +98,7 @@ def lead_to_webhook_payload(
         "property_roof_cover": lead.get("property_roof_cover"),
         "property_stories": lead.get("property_stories"),
         "property_owner": lead.get("property_owner"),
+        "proposal_url": lead.get("proposal_url"),
         "notes": " | ".join(_summary_lines(lead, quote)),
     }
 
@@ -127,6 +128,8 @@ def _summary_lines(lead: Dict[str, Any], quote: Optional[Dict[str, Any]]) -> Lis
     prop = [x for x in prop if x]
     if prop:
         lines.append("Property: " + " · ".join(prop))
+    if lead.get("proposal_url"):
+        lines.append(f"Proposal PDF: {lead['proposal_url']}")
     if quote:
         pr = quote.get("price_range") or {}
         if pr.get("display"):
