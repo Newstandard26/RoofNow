@@ -200,7 +200,8 @@
     .trust-item { padding: 4px 22px; border-left: 1px solid #e6ebf1; display: flex; gap: 14px; align-items: flex-start; }
     .trust-item:first-child { border-left: 0; }
     .trust-item svg { color: var(--nsr-blue-dark); width: 42px; height: 42px; flex: none; }
-    .trust-item img.oc-badge { height: 40px; width: auto; flex: none; }
+    .trust-item img.oc-badge { height: 48px; width: auto; flex: none; }
+    .trust-item-badge { align-items: center; justify-content: center; }
     .trust-item .ti-title { font-weight: 800; color: var(--light-text); font-size: 16px; }
     .trust-item .ti-body { color: var(--light-muted); font-size: 14px; margin-top: 3px; }
     @media (max-width: 860px) { .trust-strip .inner { grid-template-columns: repeat(2, 1fr); gap: 26px 0; } .trust-item:nth-child(odd) { border-left: 0; } }
@@ -346,9 +347,8 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.5-7-11a7 7 0 0114 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
           <div><div class="ti-title">Local &amp; Trusted</div><div class="ti-body">Proudly serving Northern Illinois</div></div>
         </div>
-        <div class="trust-item">
+        <div class="trust-item trust-item-badge">
           <img class="oc-badge" src="/assets/oc-preferred-contractor.jpg" alt="Owens Corning Preferred Contractor" loading="lazy" />
-          <div><div class="ti-title">OC Preferred Contractor</div><div class="ti-body">Screened &amp; vetted by Owens Corning</div></div>
         </div>
       </div>
     </section>
