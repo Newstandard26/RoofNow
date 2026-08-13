@@ -42,6 +42,17 @@ class TierSpec:
     blurb: str
     rate_per_square: float
     features: Tuple[str, ...]
+    # --- Owens Corning shingle widget (all optional / backward-compatible) ---
+    # {"slug": ..., "name": ..., "view": ..., "layout": ..., "style": ...,
+    #  "extra_slugs": [...]} — drives the OC-hosted shingle iframe on the web
+    # report and the static product line on the proposal PDF.
+    shingle: Optional[Dict[str, Any]] = None
+    # Short warranty line shown under the package (web + PDF).
+    warranty: str = ""
+    # Preset chips: [{"label": ..., "tone": ...}] — tones map to brand colors
+    # (recommended=NSR blue, popular=teal, value=amber, impact=red,
+    # warranty=charcoal).
+    badges: Tuple[Dict[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -80,37 +91,73 @@ DEFAULT_PRICING = PricingConfig(
         TierSpec(
             key="good",
             name="Good",
-            blurb="Quality architectural shingles — a durable, budget-friendly replacement.",
+            blurb="Owens Corning Oakridge® — a durable, budget-friendly replacement.",
             rate_per_square=475.0,
             features=(
-                "Architectural (dimensional) asphalt shingles",
+                "Owens Corning Oakridge® architectural shingles",
                 "Synthetic underlayment",
                 "New drip edge & pipe boots",
                 "Standard manufacturer warranty",
             ),
+            shingle={
+                "slug": "oakridge",
+                "name": "Owens Corning Oakridge®",
+                "view": "shingle",
+                "layout": "row",
+                "style": "default",
+                "extra_slugs": [],
+            },
+            warranty="Standard Mfr. Warranty · 5-yr NSR Labor",
         ),
         TierSpec(
             key="better",
             name="Better",
-            blurb="Upgraded shingles and ventilation — our most popular package.",
+            blurb="Owens Corning Duration® + Designer colors — our most popular package.",
             rate_per_square=585.0,
             features=(
-                "Premium architectural shingles",
+                "TruDefinition® Duration® shingles (incl. Designer colors)",
                 "Ice & water shield at eaves and valleys",
                 "Ridge vent for balanced attic ventilation",
-                "Enhanced manufacturer system warranty",
+                "OC Preferred Warranty — non-prorated materials",
+            ),
+            shingle={
+                "slug": "trudefinition-duration",
+                "name": "Owens Corning TruDefinition® Duration® + Duration® Designer",
+                "view": "shingle",
+                "layout": "row",
+                "style": "default",
+                "extra_slugs": ["trudefinition-duration-designer"],
+            },
+            warranty="OC Preferred Warranty · Non-prorated materials · 10-yr NSR Labor",
+            badges=(
+                {"label": "Most Popular", "tone": "popular"},
+                {"label": "Preferred Warranty", "tone": "warranty"},
             ),
         ),
         TierSpec(
             key="best",
             name="Best",
-            blurb="Designer / impact-resistant system with the strongest warranty.",
+            blurb="Owens Corning Duration® FLEX® — Class 4 impact-rated, strongest warranty.",
             rate_per_square=735.0,
             features=(
-                "Designer or Class 4 impact-resistant shingles",
+                "TruDefinition® Duration FLEX® Class 4 impact-resistant shingles",
                 "Full ice & water shield underlayment upgrade",
                 "Premium ridge cap, vents and flashing",
-                "Top-tier transferable warranty",
+                "OC Preferred Warranty — non-prorated materials",
+            ),
+            shingle={
+                "slug": "trudefinition-duration-flex",
+                "name": "Owens Corning TruDefinition® Duration FLEX®",
+                "view": "shingle",
+                "layout": "row",
+                "style": "default",
+                "extra_slugs": [],
+            },
+            warranty="OC Preferred Warranty · Non-prorated materials · 10-yr NSR Labor",
+            badges=(
+                {"label": "Recommended", "tone": "recommended"},
+                {"label": "Impact-Rated", "tone": "impact"},
+                {"label": "Preferred Warranty", "tone": "warranty"},
             ),
         ),
     ),
@@ -131,6 +178,39 @@ DEFAULT_PRICING = PricingConfig(
 # --------------------------------------------------------------------------- #
 
 
+def _norm_shingle(data: Any) -> Optional[Dict[str, Any]]:
+    """Sanitize a tier's OC shingle-widget config; None when absent/empty."""
+    if not isinstance(data, dict):
+        return None
+    slug = str(data.get("slug") or "").strip()
+    extra = [str(s).strip() for s in (data.get("extra_slugs") or []) if str(s).strip()]
+    if not slug and not extra:
+        return None
+    return {
+        "slug": slug,
+        "name": str(data.get("name") or "").strip(),
+        "view": str(data.get("view") or "shingle").strip() or "shingle",
+        "layout": str(data.get("layout") or "row").strip() or "row",
+        "style": str(data.get("style") or "default").strip() or "default",
+        "extra_slugs": extra,
+    }
+
+
+def _norm_badges(data: Any) -> Tuple[Dict[str, str], ...]:
+    """Sanitize a tier's badge chips to ({"label", "tone"}, ...)."""
+    if not isinstance(data, (list, tuple)):
+        return ()
+    out = []
+    for b in data:
+        if isinstance(b, dict):
+            label, tone = str(b.get("label") or "").strip(), str(b.get("tone") or "").strip()
+        else:
+            label, tone = str(b).strip(), ""
+        if label:
+            out.append({"label": label, "tone": tone or "recommended"})
+    return tuple(out)
+
+
 def config_to_dict(config: PricingConfig) -> Dict:
     """Serialize a PricingConfig to a plain dict (round-trips with from_dict)."""
     return {
@@ -141,6 +221,9 @@ def config_to_dict(config: PricingConfig) -> Dict:
                 "blurb": t.blurb,
                 "rate_per_square": t.rate_per_square,
                 "features": list(t.features),
+                "shingle": dict(t.shingle) if t.shingle else None,
+                "warranty": t.warranty,
+                "badges": [dict(b) for b in t.badges],
             }
             for t in config.tiers
         ],
@@ -166,16 +249,30 @@ def config_from_dict(data: Dict, *, base: PricingConfig = DEFAULT_PRICING) -> Pr
         raise ValueError("pricing config must be a JSON object")
 
     if "tiers" in data and data["tiers"] is not None:
-        tiers = tuple(
-            TierSpec(
+        # Configs saved before the OC shingle-widget fields existed omit
+        # shingle/warranty/badges — fall back per key to the base tier's values
+        # so old rate cards keep the widget defaults instead of losing them.
+        base_by_key = {t.key: t for t in base.tiers}
+        tiers = []
+        for t in data["tiers"]:
+            fallback = base_by_key.get(str(t.get("key")))
+            shingle = (_norm_shingle(t["shingle"]) if "shingle" in t
+                       else (dict(fallback.shingle) if fallback and fallback.shingle else None))
+            warranty = (str(t.get("warranty") or "") if "warranty" in t
+                        else (fallback.warranty if fallback else ""))
+            badges = (_norm_badges(t["badges"]) if "badges" in t
+                      else (fallback.badges if fallback else ()))
+            tiers.append(TierSpec(
                 key=str(t["key"]),
                 name=str(t.get("name", t["key"].title())),
                 blurb=str(t.get("blurb", "")),
                 rate_per_square=float(t["rate_per_square"]),
                 features=tuple(t.get("features", ())),
-            )
-            for t in data["tiers"]
-        )
+                shingle=shingle,
+                warranty=warranty,
+                badges=badges,
+            ))
+        tiers = tuple(tiers)
     else:
         tiers = base.tiers
 
@@ -282,6 +379,9 @@ class TierEstimate:
     price_low: int
     price_high: int
     price_per_square: int
+    shingle: Optional[Dict[str, Any]] = None
+    warranty: str = ""
+    badges: Tuple[Dict[str, str], ...] = ()
 
     def to_dict(self) -> dict:
         return {
@@ -294,6 +394,9 @@ class TierEstimate:
             "price_high": self.price_high,
             "price_per_square": self.price_per_square,
             "price_display": f"${self.price_low:,} – ${self.price_high:,}",
+            "shingle": dict(self.shingle) if self.shingle else None,
+            "warranty": self.warranty,
+            "badges": [dict(b) for b in self.badges],
         }
 
 
@@ -404,6 +507,9 @@ def estimate_tiers(
                 price_low=low,
                 price_high=high,
                 price_per_square=per_sq,
+                shingle=spec.shingle,
+                warranty=spec.warranty,
+                badges=spec.badges,
             )
         )
     return out

@@ -3,37 +3,91 @@
     {
       "key": "good",
       "name": "Good",
-      "blurb": "Quality architectural shingles \u2014 a durable, budget-friendly replacement.",
+      "blurb": "Owens Corning Oakridge® — a durable, budget-friendly replacement.",
       "rate_per_square": 475.0,
       "features": [
-        "Architectural (dimensional) asphalt shingles",
+        "Owens Corning Oakridge® architectural shingles",
         "Synthetic underlayment",
         "New drip edge & pipe boots",
         "Standard manufacturer warranty"
-      ]
+      ],
+      "shingle": {
+        "slug": "oakridge",
+        "name": "Owens Corning Oakridge®",
+        "view": "shingle",
+        "layout": "row",
+        "style": "default",
+        "extra_slugs": []
+      },
+      "warranty": "Standard Mfr. Warranty · 5-yr NSR Labor",
+      "badges": []
     },
     {
       "key": "better",
       "name": "Better",
-      "blurb": "Upgraded shingles and ventilation \u2014 our most popular package.",
+      "blurb": "Owens Corning Duration® + Designer colors — our most popular package.",
       "rate_per_square": 585.0,
       "features": [
-        "Premium architectural shingles",
+        "TruDefinition® Duration® shingles (incl. Designer colors)",
         "Ice & water shield at eaves and valleys",
         "Ridge vent for balanced attic ventilation",
-        "Enhanced manufacturer system warranty"
+        "OC Preferred Warranty — non-prorated materials"
+      ],
+      "shingle": {
+        "slug": "trudefinition-duration",
+        "name": "Owens Corning TruDefinition® Duration® + Duration® Designer",
+        "view": "shingle",
+        "layout": "row",
+        "style": "default",
+        "extra_slugs": [
+          "trudefinition-duration-designer"
+        ]
+      },
+      "warranty": "OC Preferred Warranty · Non-prorated materials · 10-yr NSR Labor",
+      "badges": [
+        {
+          "label": "Most Popular",
+          "tone": "popular"
+        },
+        {
+          "label": "Preferred Warranty",
+          "tone": "warranty"
+        }
       ]
     },
     {
       "key": "best",
       "name": "Best",
-      "blurb": "Designer / impact-resistant system with the strongest warranty.",
+      "blurb": "Owens Corning Duration® FLEX® — Class 4 impact-rated, strongest warranty.",
       "rate_per_square": 735.0,
       "features": [
-        "Designer or Class 4 impact-resistant shingles",
+        "TruDefinition® Duration FLEX® Class 4 impact-resistant shingles",
         "Full ice & water shield underlayment upgrade",
         "Premium ridge cap, vents and flashing",
-        "Top-tier transferable warranty"
+        "OC Preferred Warranty — non-prorated materials"
+      ],
+      "shingle": {
+        "slug": "trudefinition-duration-flex",
+        "name": "Owens Corning TruDefinition® Duration FLEX®",
+        "view": "shingle",
+        "layout": "row",
+        "style": "default",
+        "extra_slugs": []
+      },
+      "warranty": "OC Preferred Warranty · Non-prorated materials · 10-yr NSR Labor",
+      "badges": [
+        {
+          "label": "Recommended",
+          "tone": "recommended"
+        },
+        {
+          "label": "Impact-Rated",
+          "tone": "impact"
+        },
+        {
+          "label": "Preferred Warranty",
+          "tone": "warranty"
+        }
       ]
     }
   ],

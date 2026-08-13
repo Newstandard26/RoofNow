@@ -37,6 +37,8 @@
     .msg { font-size:13px; }
     .msg.ok { color:var(--ok); } .msg.err { color:var(--bad); }
     .acc-row { display:grid; grid-template-columns: 2fr 1fr 1.2fr 1.4fr auto; gap:8px; align-items:end; margin-bottom:8px; }
+    .badge-row { display:grid; grid-template-columns: 2fr 1.2fr auto; gap:8px; align-items:end; margin-bottom:6px; }
+    .subhead { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--accent); margin:14px 0 8px; font-weight:700; }
     .checks { display:flex; gap:10px; font-size:13px; color:var(--ink); text-transform:none; letter-spacing:0; }
     .checks label { display:flex; align-items:center; gap:5px; text-transform:none; letter-spacing:0; color:var(--ink); margin:0; }
     .checks input { width:auto; }
@@ -169,15 +171,35 @@
 
     // ---- form <-> config ----
     const TIERS = ["good", "better", "best"];
+    const BADGE_TONES = ["recommended", "popular", "value", "impact", "warranty"];
+    function badgeRowHTML(b) {
+      b = b || { label: "", tone: "recommended" };
+      return '<div class="badge-row"><div><label>Badge label</label><input class="b_label" value="' + esc(b.label) + '"></div>' +
+        '<div><label>Tone</label><select class="b_tone">' + BADGE_TONES.map((t) =>
+          '<option value="' + t + '"' + (b.tone === t ? " selected" : "") + '>' + t + "</option>").join("") + "</select></div>" +
+        '<button class="btn ghost sm" onclick="this.closest(\'.badge-row\').remove()">✕</button></div>';
+    }
+    function addBadge(btn) { btn.insertAdjacentHTML("beforebegin", badgeRowHTML()); }
     function renderTiers(tiers) {
       const map = {}; (tiers || []).forEach((t) => (map[t.key] = t));
       $("tiers").innerHTML = TIERS.map((k) => {
         const t = map[k] || { key: k, name: k, rate_per_square: 0, blurb: "", features: [] };
+        const sh = t.shingle || {};
         return '<div class="tier" data-k="' + k + '"><h3>' + (t.name || k) + '</h3>' +
           '<div class="row g2"><div><label>Name</label><input class="t_name" value="' + esc(t.name) + '"></div>' +
           '<div><label>Price / square ($)</label><input class="t_rate" type="number" step="1" value="' + (t.rate_per_square || 0) + '"></div></div>' +
           '<div class="field"><label>Blurb</label><input class="t_blurb" value="' + esc(t.blurb) + '"></div>' +
-          '<div class="field"><label>Features (one per line)</label><textarea class="t_feat" rows="4">' + esc((t.features || []).join("\n")) + '</textarea></div></div>';
+          '<div class="field"><label>Features (one per line)</label><textarea class="t_feat" rows="4">' + esc((t.features || []).join("\n")) + '</textarea></div>' +
+          '<div class="subhead">Owens Corning shingle widget</div>' +
+          '<div class="row g2"><div><label>OC shingle slug (blank = no widget)</label><input class="t_slug" value="' + esc(sh.slug) + '"></div>' +
+          '<div><label>Extra slugs (comma-sep)</label><input class="t_extra" value="' + esc((sh.extra_slugs || []).join(", ")) + '"></div></div>' +
+          '<div class="row g3"><div><label>View</label><input class="t_view" value="' + esc(sh.view || "shingle") + '"></div>' +
+          '<div><label>Layout</label><input class="t_layout" value="' + esc(sh.layout || "row") + '"></div>' +
+          '<div><label>Style</label><input class="t_style" value="' + esc(sh.style || "default") + '"></div></div>' +
+          '<div class="field"><label>Product name (PDF + report)</label><input class="t_prod" value="' + esc(sh.name) + '"></div>' +
+          '<div class="field"><label>Warranty line</label><input class="t_warranty" value="' + esc(t.warranty) + '"></div>' +
+          '<div class="field"><label>Badges</label><div class="t_badges">' + (t.badges || []).map(badgeRowHTML).join("") + '</div>' +
+          '<button class="btn ghost sm" onclick="addBadge(this)">+ Add badge</button></div></div>';
       }).join("");
     }
     function renderPitch(rows) {
@@ -213,15 +235,26 @@
     }
 
     function buildConfig() {
-      const tiers = [...$("tiers").querySelectorAll(".tier")].map((el) => ({
-        key: el.dataset.k, name: el.querySelector(".t_name").value.trim(),
-        rate_per_square: parseFloat(el.querySelector(".t_rate").value) || 0,
-        blurb: el.querySelector(".t_blurb").value.trim(),
-        features: el.querySelector(".t_feat").value.split("\n").map((s) => s.trim()).filter(Boolean),
-      }));
+      const csv = (v) => v.split(",").map((s) => s.trim()).filter(Boolean);
+      const tiers = [...$("tiers").querySelectorAll(".tier")].map((el) => {
+        const v = (cls) => el.querySelector(cls).value.trim();
+        const slug = v(".t_slug"), extra = csv(v(".t_extra"));
+        return {
+          key: el.dataset.k, name: v(".t_name"),
+          rate_per_square: parseFloat(el.querySelector(".t_rate").value) || 0,
+          blurb: v(".t_blurb"),
+          features: el.querySelector(".t_feat").value.split("\n").map((s) => s.trim()).filter(Boolean),
+          shingle: (slug || extra.length) ? { slug, name: v(".t_prod"), view: v(".t_view") || "shingle",
+            layout: v(".t_layout") || "row", style: v(".t_style") || "default", extra_slugs: extra } : null,
+          warranty: v(".t_warranty"),
+          badges: [...el.querySelectorAll(".badge-row")].map((r) => ({
+            label: r.querySelector(".b_label").value.trim(),
+            tone: r.querySelector(".b_tone").value,
+          })).filter((b) => b.label),
+        };
+      });
       const pitch = [...$("pitchRows").querySelectorAll("tr")].map((tr) =>
         [parseInt(tr.querySelector(".p_thr").value) || 0, parseFloat(tr.querySelector(".p_mult").value) || 1]);
-      const csv = (v) => v.split(",").map((s) => s.trim()).filter(Boolean);
       const accessories = [...$("accessories").querySelectorAll(".acc-row")].map((el) => ({
         label: el.querySelector(".a_label").value.trim(),
         amount: parseFloat(el.querySelector(".a_amt").value) || 0,

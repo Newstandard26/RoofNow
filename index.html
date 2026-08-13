@@ -146,6 +146,23 @@
     .tier ul { list-style: none; padding: 0; margin: 14px 0 0; font-size: 13.5px; }
     .tier ul li { padding: 5px 0 5px 22px; position: relative; color: var(--muted); }
     .tier ul li::before { content: "✓"; position: absolute; left: 0; color: var(--nsr-blue); font-weight: 800; }
+    /* Owens Corning shingle widget + badges + warranty */
+    .tier .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+    .badge-chip { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; padding: 4px 10px; border-radius: 999px; }
+    .badge-recommended { background: rgba(81,197,244,.16); color: var(--nsr-blue); }
+    .badge-popular { background: rgba(52,214,176,.16); color: var(--ok); }
+    .badge-value { background: rgba(231,183,101,.16); color: var(--warn); }
+    .badge-impact { background: rgba(232,116,111,.18); color: var(--bad); }
+    .badge-warranty { background: rgba(255,255,255,.12); color: var(--text); }
+    .tier .warranty-line { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+    .tier .warranty-line b { color: var(--text); }
+    .shingle-embed { margin-top: 14px; }
+    .shingle-embed iframe { width: 100%; height: 190px; border: 0; border-radius: 10px; background: #fff; display: block; }
+    .shingle-embed iframe + iframe { margin-top: 8px; }
+    .shingle-embed .se-note { font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .oc-warranty { text-align: center; }
+    .oc-warranty img { height: 84px; width: auto; margin: 8px auto 12px; display: block; }
+    .oc-warranty iframe { width: 100%; height: 560px; border: 0; border-radius: 10px; background: #fff; margin-top: 14px; }
     .rsection { padding: 20px 22px; margin-top: 16px; } .rsection h3 { margin: 0 0 10px; font-size: 17px; } .rsection p { margin: 0; color: var(--muted); font-size: 14.5px; }
     .ai-text { color: var(--text); font-size: 15px; }
     .driver { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); } .driver:first-of-type { border-top: 0; }
@@ -170,13 +187,14 @@
 
     /* ---------------- Trust strip ---------------- */
     .trust-strip { background: var(--white); padding: 34px 0; }
-    .trust-strip .inner { max-width: 1180px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: repeat(4, 1fr); }
-    .trust-item { padding: 4px 26px; border-left: 1px solid #e6ebf1; display: flex; gap: 14px; align-items: flex-start; }
+    .trust-strip .inner { max-width: 1180px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: repeat(5, 1fr); }
+    .trust-item { padding: 4px 22px; border-left: 1px solid #e6ebf1; display: flex; gap: 14px; align-items: flex-start; }
     .trust-item:first-child { border-left: 0; }
     .trust-item svg { color: var(--nsr-blue-dark); width: 42px; height: 42px; flex: none; }
+    .trust-item img.oc-badge { height: 40px; width: auto; flex: none; }
     .trust-item .ti-title { font-weight: 800; color: var(--light-text); font-size: 16px; }
     .trust-item .ti-body { color: var(--light-muted); font-size: 14px; margin-top: 3px; }
-    @media (max-width: 860px) { .trust-strip .inner { grid-template-columns: repeat(2, 1fr); gap: 26px 0; } .trust-item:nth-child(3) { border-left: 0; } }
+    @media (max-width: 860px) { .trust-strip .inner { grid-template-columns: repeat(2, 1fr); gap: 26px 0; } .trust-item:nth-child(odd) { border-left: 0; } }
     @media (max-width: 520px) { .trust-strip .inner { grid-template-columns: 1fr; gap: 22px; } .trust-item { border-left: 0; } }
 
     /* ---------------- How it works ---------------- */
@@ -318,6 +336,10 @@
         <div class="trust-item">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.5-7-11a7 7 0 0114 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
           <div><div class="ti-title">Local &amp; Trusted</div><div class="ti-body">Proudly serving Northern Illinois</div></div>
+        </div>
+        <div class="trust-item">
+          <img class="oc-badge" src="/assets/oc-preferred-contractor.jpg" alt="Owens Corning Preferred Contractor" loading="lazy" />
+          <div><div class="ti-title">OC Preferred Contractor</div><div class="ti-body">Screened &amp; vetted by Owens Corning</div></div>
         </div>
       </div>
     </section>
@@ -503,6 +525,44 @@
     const BOOKING_URL = "https://newstandardrestoration.com/contact";
     const esc2 = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
 
+    // Owens Corning shingle widget — OC-hosted iframe per product slug. Their
+    // loader only boots on DOMContentLoaded (and the report renders after
+    // submit), so we build the iframe URL ourselves for full timing control.
+    const BADGE_TONES = ["recommended", "popular", "value", "impact", "warranty"];
+    let ocFrameSeq = 0;
+    function shingleEmbed(sh) {
+      if (!sh) return "";
+      const slugs = [sh.slug].concat(sh.extra_slugs || []).filter(Boolean);
+      if (!slugs.length) return "";
+      const qs = "view=" + encodeURIComponent(sh.view || "shingle") +
+        "&style=" + encodeURIComponent(sh.style || "default") +
+        "&layout=" + encodeURIComponent(sh.layout || "row") + "&allowedcolors=";
+      return '<div class="shingle-embed">' + slugs.map((s) =>
+        '<iframe class="ocframe" id="ocframe-' + (++ocFrameSeq) +
+        '" src="https://www.owenscorning.com/en-us/public_widgets/shingle/' + encodeURIComponent(s) + "?" + qs +
+        '" loading="lazy" title="Owens Corning shingle colors"></iframe>').join("") +
+        '<div class="se-note">Scroll the swatches to browse every available color.</div></div>';
+    }
+
+    // OC widget pages run the standard iframe-resizer child: they announce
+    // "[iFrameResizerChild]Ready", we reply with an init message, and they then
+    // post "[iFrameSizer]<id>:<height>:<width>:<event>" whenever content
+    // resizes. The CSS heights stay as a graceful fallback.
+    window.addEventListener("message", (e) => {
+      if (String(e.origin).indexOf("owenscorning.com") < 0 || typeof e.data !== "string") return;
+      if (e.data.indexOf("[iFrameResizerChild]Ready") === 0) {
+        document.querySelectorAll("iframe.ocframe").forEach((f) => {
+          if (f.contentWindow === e.source) f.contentWindow.postMessage("[iFrameSizer]" + f.id + ":8:false", "*");
+        });
+        return;
+      }
+      if (e.data.indexOf("[iFrameSizer]") !== 0) return;
+      const p = e.data.slice(13).split(":");
+      const f = document.getElementById(p[0]);
+      const h = parseInt(p[1], 10);
+      if (f && h > 40) f.style.height = Math.min(h + 6, 1100) + "px";
+    });
+
     function renderReport(rep, firstName) {
       const c = rep.confidence || {}, q = rep.quote || {}, pr = q.price_range || {};
       const snap = rep.roof_snapshot || {}, sum = rep.ai_summary || {}, pe = rep.price_explanation || {};
@@ -550,12 +610,19 @@
       if (pe.drivers && pe.drivers.length) left.push('<div class="rsection"><h3>' + esc2(pe.headline || "Why this estimate?") + "</h3><p style=\"margin-bottom:10px\">" + esc2(pe.basis || "") + "</p>" +
         pe.drivers.map((d) => '<div class="driver"><div class="dlabel">' + esc2(d.label) + '</div><div class="dval">' + esc2(d.value) + '</div><div class="dnote">' + esc2(d.note || "") + "</div></div>").join("") + "</div>");
 
-      // RIGHT: package options, then the inspection CTA card
+      // RIGHT: package options (OC shingle widget + badges + warranty), then the inspection CTA card
       if (q.estimates && q.estimates.length) right.push('<div><div class="section-title" style="margin-top:0">Your package options</div><div class="tiers">' +
-        q.estimates.map((t) => { const f = t.key === "better"; return '<div class="tier' + (f ? " featured" : "") + '">' + (f ? '<span class="pop">Most popular</span>' : "") +
+        q.estimates.map((t) => { const f = t.key === "better";
+          const badges = (t.badges && t.badges.length) ? t.badges : (f ? [{ label: "Most popular", tone: "popular" }] : []);
+          const chips = badges.length ? '<div class="badges">' + badges.map((b) =>
+            '<span class="badge-chip badge-' + (BADGE_TONES.indexOf(b.tone) >= 0 ? b.tone : "recommended") + '">' + esc2(b.label) + "</span>").join("") + "</div>" : "";
+          return '<div class="tier' + (f ? " featured" : "") + '">' + chips +
           "<h3>" + esc2(t.name) + "</h3><div class=\"blurb\">" + esc2(t.blurb) + "</div><div class=\"price\">" + esc2(t.price_display) + "</div>" +
           '<div class="persq">' + (t.price_per_square ? "~$" + t.price_per_square.toLocaleString() + " / square installed" : "") + "</div>" +
-          "<ul>" + (t.features || []).map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul></div>"; }).join("") + "</div></div>");
+          "<ul>" + (t.features || []).map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul>" +
+          shingleEmbed(t.shingle) +
+          (t.warranty ? '<div class="warranty-line"><b>Warranty:</b> ' + esc2(t.warranty) + "</div>" : "") +
+          "</div>"; }).join("") + "</div></div>");
       const cta = nx.cta_label || "Schedule Free Roof Verification";
       const checklist = (nx.checklist || []).map((x) => '<div class="vcheck"><b>✓</b>' + esc2(x) + "</div>").join("");
       const btn = '<a class="btn" href="' + esc2(BOOKING_URL) + '" target="_blank" rel="noopener">' + esc2(cta) + "</a>";
@@ -565,7 +632,12 @@
       if (rep.proposal_url) right.push('<div class="verify" style="padding:18px"><p style="margin:0 0 12px">Get your full branded proposal to review and sign.</p>' +
         '<a class="btn" href="' + esc2(rep.proposal_url) + '" target="_blank" rel="noopener">Download Your Proposal (PDF)</a></div>');
 
-      // FULL WIDTH: verification details + storm review + disclaimer
+      // FULL WIDTH: OC warranty + verification details + storm review + disclaimer
+      full.push('<div class="rsection oc-warranty"><h3>Owens Corning Preferred Protection Warranty</h3>' +
+        '<img src="/assets/oc-preferred-protection.png" alt="Owens Corning Preferred Protection Limited Warranty" loading="lazy" />' +
+        '<p>As an Owens Corning Preferred Contractor, New Standard Restoration can register your new roof for the ' +
+        'Preferred Protection Limited Warranty — non-prorated material coverage plus our own labor warranty.</p>' +
+        '<iframe class="ocframe" id="ocframe-warranty" src="https://www.owenscorning.com/en-us/public_widgets/warranty?preferredProtection=true" loading="lazy" title="Owens Corning warranty coverage"></iframe></div>');
       full.push('<div class="rsection"><h3>' + esc2(rh.headline || "What we'll verify during your free roof assessment") + "</h3><p>" + esc2(rh.message || "") + "</p>" +
         (rh.checklist ? '<ul class="checklist">' + rh.checklist.map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul>" : "") + "</div>");
       full.push('<div class="rsection"><h3>' + esc2(se.headline || "Storm & damage review") + "</h3><p>" + esc2(se.message || "") + "</p></div>");
