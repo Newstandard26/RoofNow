@@ -137,3 +137,29 @@ def test_funnel_never_raises_on_sink_error(monkeypatch):
 
     results = funnel_lead(_LEAD, _QUOTE)
     assert results["slack"].startswith("error:")  # captured, not raised
+
+
+def test_build_selection_email_contents():
+    from roofwall.quote.funnel import build_selection_email
+
+    subject, body = build_selection_email(
+        {"first_name": "Jane", "last_name": "Doe", "email": "jane@example.com",
+         "phone": "555-1234", "address": "1 Main St, Roscoe, IL",
+         "proposal_url": "https://roofnow.example/api/proposal?x=1"},
+        {"package_key": "best", "package_name": "Best",
+         "price_display": "$19,400 – $22,300",
+         "shingle_name": "Owens Corning TruDefinition® Duration FLEX®"},
+    )
+    assert subject == "RoofNow update: Jane Doe selected the Best package"
+    assert "Best ($19,400 – $22,300)" in body
+    assert "Duration FLEX" in body
+    assert "jane@example.com" in body
+    assert "1 Main St" in body
+    assert "https://roofnow.example/api/proposal?x=1" in body
+
+
+def test_send_selection_email_skipped_without_smtp(monkeypatch):
+    from roofwall.quote.funnel import send_selection_email
+
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    assert send_selection_email({"email": "j@x.com"}, {"package_key": "good"}) == "skipped"

@@ -43,6 +43,21 @@ try:
 except Exception:  # noqa: BLE001
     _LOGO_READER = None
 
+# Owens Corning "Preferred Protection" warranty badge (packages page).
+try:
+    _OC_PROTECTION_READER = ImageReader(os.path.join(_ASSETS, "oc-preferred-protection.png"))
+except Exception:  # noqa: BLE001
+    _OC_PROTECTION_READER = None
+
+# Badge chip tones -> print colors (matches the web report chips).
+_BADGE_TONES = {
+    "recommended": BLUE_DARK,
+    "popular": HexColor("#0FA98A"),
+    "value": HexColor("#B7791F"),
+    "impact": HexColor("#C0392B"),
+    "warranty": CHARCOAL,
+}
+
 
 def _wrap(c, text, font, size, max_w) -> List[str]:
     words, lines, cur = str(text).split(), [], ""
@@ -269,8 +284,8 @@ def _packages(c, report, customer, date_str):
     n = max(1, len(estimates))
     gap = 12
     cw = (PAGE_W - 2 * MARGIN - gap * (n - 1)) / n
-    top = PAGE_H - 100
-    card_h = 246
+    top = PAGE_H - 96
+    card_h = 330
     for i, e in enumerate(estimates):
         cx = MARGIN + i * (cw + gap)
         featured = e.get("key") == "best"
@@ -279,32 +294,77 @@ def _packages(c, report, customer, date_str):
         if featured:
             c.setStrokeColor(BLUE); c.setLineWidth(2)
             c.roundRect(cx, top - card_h, cw, card_h, 10, fill=0, stroke=1)
-            c.setFillColor(BLUE); c.roundRect(cx + 12, top - 24, 96, 18, 9, fill=1, stroke=0)
-            c.setFillColor(HexColor("#06131C")); c.setFont("Helvetica-Bold", 8)
-            c.drawString(cx + 20, top - 20, "RECOMMENDED")
-        ty = top - 44
+
+        # Badge chips (from the rate card; fall back to the old featured chip).
+        badges = [b for b in (e.get("badges") or []) if b.get("label")]
+        if not badges and featured:
+            badges = [{"label": "Recommended", "tone": "recommended"}]
+        bx, by = cx + 12, top - 22
+        for b in badges:
+            label = str(b["label"]).upper()
+            w = c.stringWidth(label, "Helvetica-Bold", 6.5) + 12
+            if bx + w > cx + cw - 12:      # wrap chips to the next row
+                bx = cx + 12; by -= 15
+            tone = _BADGE_TONES.get(str(b.get("tone") or ""), BLUE_DARK)
+            c.setFillColor(tone); c.roundRect(bx, by - 4, w, 13, 6, fill=1, stroke=0)
+            c.setFillColor(white); c.setFont("Helvetica-Bold", 6.5)
+            c.drawString(bx + 6, by, label)
+            bx += w + 5
+        ty = (by - 22) if badges else (top - 34)
+
         c.setFillColor(INK); c.setFont("Helvetica-Bold", 18)
-        c.drawString(cx + 14, ty, str(e.get("name", ""))); ty -= 26
+        c.drawString(cx + 14, ty, str(e.get("name", ""))); ty -= 24
         c.setFillColor(BLUE_DARK); c.setFont("Helvetica-Bold", 15)
-        c.drawString(cx + 14, ty, str(e.get("price_display", _money(e.get("price"))))); ty -= 20
+        c.drawString(cx + 14, ty, str(e.get("price_display", _money(e.get("price"))))); ty -= 18
         c.setFillColor(MUTED); c.setFont("Helvetica", 8.5)
         if e.get("price_per_square"):
             c.drawString(cx + 14, ty, f"~${int(e['price_per_square']):,}/square installed")
-        ty -= 16
-        c.setStrokeColor(LINE); c.line(cx + 14, ty, cx + cw - 14, ty); ty -= 16
-        for feat in (e.get("features") or [])[:6]:
+        ty -= 14
+        c.setStrokeColor(LINE); c.line(cx + 14, ty, cx + cw - 14, ty); ty -= 14
+
+        # Shingle product line (static — the interactive color widget lives online).
+        shingle = e.get("shingle") or {}
+        product = shingle.get("name") or ""
+        if product:
+            ty = _para(c, product, cx + 14, ty, "Helvetica-Bold", 8.5, cw - 28, 10.5, BLUE_DARK)
+            ty -= 6
+
+        for feat in (e.get("features") or [])[:5]:
             c.setFillColor(BLUE_DARK); c.setFont("Helvetica-Bold", 9)
             c.drawString(cx + 14, ty, "✓")
-            ny = _para(c, feat, cx + 26, ty, "Helvetica", 9, cw - 40, 11.5, HexColor("#33404D"))
+            ny = _para(c, feat, cx + 26, ty, "Helvetica", 8.5, cw - 40, 10.5, HexColor("#33404D"))
             ty = ny - 3
 
-    # Confidence + signature
+        # Warranty band anchored to the bottom of the card.
+        warranty = str(e.get("warranty") or "")
+        if warranty:
+            wy = top - card_h + 30
+            c.setStrokeColor(LINE); c.line(cx + 14, wy + 8, cx + cw - 14, wy + 8)
+            _para(c, warranty, cx + 14, wy - 4, "Helvetica", 7.5, cw - 28, 9.5, MUTED)
+
+    # Confidence + OC warranty badge + color nudge + signature
     conf = report.get("confidence") or {}
-    y = top - card_h - 26
+    y = top - card_h - 22
     if conf.get("level"):
         c.setFillColor(MUTED); c.setFont("Helvetica", 10)
         c.drawString(MARGIN, y, f"Estimate confidence: {conf.get('level')}  ({conf.get('accuracy_text', '')})")
-    y -= 30
+    y -= 22
+    badge_w = 0
+    if _OC_PROTECTION_READER is not None:
+        try:
+            iw, ih = _OC_PROTECTION_READER.getSize()
+            bh = 46; bw = bh * iw / ih
+            c.drawImage(_OC_PROTECTION_READER, PAGE_W - MARGIN - bw, y - 40, width=bw,
+                        height=bh, mask="auto", preserveAspectRatio=True)
+            badge_w = bw + 16
+        except Exception:  # noqa: BLE001
+            badge_w = 0
+    c.setFillColor(INK); c.setFont("Helvetica-Bold", 10.5)
+    c.drawString(MARGIN, y - 6, "Owens Corning Preferred Protection — and your choice of color")
+    _para(c, "Browse every available shingle color interactively in your online RoofNow "
+             "report, or ask us for physical samples at your free inspection.",
+          MARGIN, y - 20, "Helvetica", 9, PAGE_W - 2 * MARGIN - badge_w, 12, MUTED)
+    y -= 56
     c.setFillColor(INK); c.setFont("Helvetica-Bold", 13)
     c.drawString(MARGIN, y, "Accept your proposal"); y -= 8
     c.setStrokeColor(INK); c.setLineWidth(1)

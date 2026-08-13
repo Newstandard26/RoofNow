@@ -137,8 +137,26 @@
     .notes { margin: 12px 0 0; font-size: 13.5px; } .notes li { margin: 3px 0; }
     .notes .reason::marker { color: var(--ok); } .notes .warn::marker { color: var(--warn); }
     .section-title { margin: 26px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--nsr-blue); font-weight: 700; }
-    .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
-    .tier { padding: 20px; display: flex; flex-direction: column; }
+    /* Good / Better / Best as full-width featured tabs — one package visible at a time */
+    .packages-wide { margin-top: 18px; }
+    .tier-tabs { display: flex; gap: 10px; margin-bottom: 14px; }
+    .tier-tab { flex: 1; padding: 15px 10px; font-family: inherit; font-weight: 800; font-size: 16px; letter-spacing: .02em; color: var(--muted); background: var(--charcoal); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
+    .tier-tab:hover { color: var(--text); border-color: var(--nsr-blue); }
+    .tier-tab.active { color: #031019; background: linear-gradient(180deg, #51C5F4, #1597d4); border-color: transparent; }
+    .tier-panel { display: none; }
+    .tier-panel.show { display: block; }
+    .tier { padding: 24px; display: grid; grid-template-columns: minmax(280px, 360px) 1fr 340px; grid-template-areas: "info shingle finance"; gap: 26px; align-items: start; }
+    .tier .tier-info { grid-area: info; min-width: 0; }
+    .tier .shingle-embed { grid-area: shingle; margin-top: 0; min-width: 0; }
+    .tier .tier-finance { grid-area: finance; min-width: 0; text-align: center; }
+    .tier-finance .tf-head { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--nsr-blue); font-weight: 700; margin-bottom: 10px; text-align: left; }
+    .tier-finance iframe { border: 0; border-radius: 10px; background: #fff; max-width: 100%; }
+    .select-pkg { width: 100%; margin-top: 16px; padding: 14px; font-family: inherit; font-size: 15px; font-weight: 800; color: #031019; background: linear-gradient(180deg, #51C5F4, #1597d4); border: 0; border-radius: 10px; cursor: pointer; }
+    .select-pkg:hover { filter: brightness(1.08); }
+    .select-pkg.selected { background: linear-gradient(180deg, #34d6b0, #18b894); }
+    .selected-pkg-note { margin: 0 0 14px; color: var(--ok); font-weight: 700; font-size: 15px; }
+    @media (max-width: 1200px) { .tier { grid-template-columns: minmax(280px, 360px) 1fr; grid-template-areas: "info shingle" "finance finance"; } .tier .tier-finance { text-align: left; } }
+    @media (max-width: 880px) { .tier { grid-template-columns: 1fr; grid-template-areas: "info" "shingle" "finance"; gap: 18px; } .tier .shingle-embed { margin-top: 4px; } .tier-tab { padding: 12px 8px; font-size: 14px; } }
     .tier.featured { border-color: var(--nsr-blue); box-shadow: 0 0 0 1px var(--nsr-blue) inset; }
     .tier .pop { align-self: flex-start; font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--nsr-blue); background: rgba(81,197,244,.14); border-radius: 999px; padding: 3px 9px; margin-bottom: 8px; }
     .tier h3 { margin: 0 0 4px; font-size: 20px; } .tier .blurb { color: var(--muted); font-size: 13.5px; min-height: 38px; }
@@ -146,6 +164,23 @@
     .tier ul { list-style: none; padding: 0; margin: 14px 0 0; font-size: 13.5px; }
     .tier ul li { padding: 5px 0 5px 22px; position: relative; color: var(--muted); }
     .tier ul li::before { content: "✓"; position: absolute; left: 0; color: var(--nsr-blue); font-weight: 800; }
+    /* Owens Corning shingle widget + badges + warranty */
+    .tier .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+    .badge-chip { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; padding: 4px 10px; border-radius: 999px; }
+    .badge-recommended { background: rgba(81,197,244,.16); color: var(--nsr-blue); }
+    .badge-popular { background: rgba(52,214,176,.16); color: var(--ok); }
+    .badge-value { background: rgba(231,183,101,.16); color: var(--warn); }
+    .badge-impact { background: rgba(232,116,111,.18); color: var(--bad); }
+    .badge-warranty { background: rgba(255,255,255,.12); color: var(--text); }
+    .tier .warranty-line { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+    .tier .warranty-line b { color: var(--text); }
+    .shingle-embed { margin-top: 14px; }
+    .shingle-embed iframe { width: 100%; height: 400px; border: 0; border-radius: 10px; background: #fff; display: block; }
+    .shingle-embed iframe + iframe { margin-top: 12px; }
+    .shingle-embed .se-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .oc-warranty { text-align: center; }
+    .oc-warranty img { height: 92px; width: auto; margin: 8px auto 14px; display: block; background: #fff; padding: 10px 18px; border-radius: 12px; box-sizing: content-box; }
+    .oc-warranty iframe { width: 100%; height: 920px; border: 0; border-radius: 10px; background: #fff; margin-top: 14px; }
     .rsection { padding: 20px 22px; margin-top: 16px; } .rsection h3 { margin: 0 0 10px; font-size: 17px; } .rsection p { margin: 0; color: var(--muted); font-size: 14.5px; }
     .ai-text { color: var(--text); font-size: 15px; }
     .driver { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); } .driver:first-of-type { border-top: 0; }
@@ -159,24 +194,25 @@
     @media (max-width: 520px) { .grid2 { grid-template-columns: 1fr; } }
 
     /* Two-column desktop report layout (presentation only) */
-    #result { max-width: 1080px; }
+    #result { max-width: 1440px; }
     .report-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 18px; align-items: start; margin-top: 16px; }
     .report-left, .report-right { display: grid; gap: 16px; align-content: start; }
     .report-left > *, .report-right > * { margin: 0 !important; }
-    .report-right .tiers { grid-template-columns: 1fr; }   /* Good/Better/Best stacked */
     .report-full { display: grid; gap: 16px; margin-top: 18px; }
     .report-full > * { margin: 0 !important; }
     @media (max-width: 880px) { #result { max-width: 760px; } .report-grid { grid-template-columns: 1fr; } }
 
     /* ---------------- Trust strip ---------------- */
     .trust-strip { background: var(--white); padding: 34px 0; }
-    .trust-strip .inner { max-width: 1180px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: repeat(4, 1fr); }
-    .trust-item { padding: 4px 26px; border-left: 1px solid #e6ebf1; display: flex; gap: 14px; align-items: flex-start; }
+    .trust-strip .inner { max-width: 1180px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: repeat(5, 1fr); }
+    .trust-item { padding: 4px 22px; border-left: 1px solid #e6ebf1; display: flex; gap: 14px; align-items: flex-start; }
     .trust-item:first-child { border-left: 0; }
     .trust-item svg { color: var(--nsr-blue-dark); width: 42px; height: 42px; flex: none; }
+    .trust-item img.oc-badge { height: 48px; width: auto; flex: none; }
+    .trust-item-badge { align-items: center; justify-content: center; }
     .trust-item .ti-title { font-weight: 800; color: var(--light-text); font-size: 16px; }
     .trust-item .ti-body { color: var(--light-muted); font-size: 14px; margin-top: 3px; }
-    @media (max-width: 860px) { .trust-strip .inner { grid-template-columns: repeat(2, 1fr); gap: 26px 0; } .trust-item:nth-child(3) { border-left: 0; } }
+    @media (max-width: 860px) { .trust-strip .inner { grid-template-columns: repeat(2, 1fr); gap: 26px 0; } .trust-item:nth-child(odd) { border-left: 0; } }
     @media (max-width: 520px) { .trust-strip .inner { grid-template-columns: 1fr; gap: 22px; } .trust-item { border-left: 0; } }
 
     /* ---------------- How it works ---------------- */
@@ -319,6 +355,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-5.5-7-11a7 7 0 0114 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
           <div><div class="ti-title">Local &amp; Trusted</div><div class="ti-body">Proudly serving Northern Illinois</div></div>
         </div>
+        <div class="trust-item trust-item-badge">
+          <img class="oc-badge" src="/assets/oc-preferred-contractor.jpg" alt="Owens Corning Preferred Contractor" loading="lazy" />
+        </div>
       </div>
     </section>
 
@@ -402,6 +441,9 @@
 
     let foundAddress = null;   // normalized address from the preview (used for the lead)
     let selectedLoc = null;    // {lat, lng, description} once an autocomplete suggestion is picked
+    let leadInfo = null;       // contact details captured at unlock (for the selection email)
+    let reportData = null;     // last rendered report (estimates + proposal link)
+    let lastSelectionSent = null;  // package key of the last emailed selection
 
     // ---- Step 1: address -> preview ----
     async function runPreview() {
@@ -483,6 +525,7 @@
         const data = await r.json().catch(() => ({}));
         if (!r.ok) { $("unlockErr").textContent = (data.errors || [data.error || "Please check your details."]).join(" "); return; }
         hide($("status"));
+        leadInfo = body;
         if (data.report) {
           renderReport(data.report, body.first_name);
           hide($("teaser")); show($("result"));
@@ -503,10 +546,48 @@
     const BOOKING_URL = "https://newstandardrestoration.com/contact";
     const esc2 = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
 
+    // Owens Corning shingle widget — OC-hosted iframe per product slug. Their
+    // loader only boots on DOMContentLoaded (and the report renders after
+    // submit), so we build the iframe URL ourselves for full timing control.
+    const BADGE_TONES = ["recommended", "popular", "value", "impact", "warranty"];
+    let ocFrameSeq = 0;
+    function shingleEmbed(sh) {
+      if (!sh) return "";
+      const slugs = [sh.slug].concat(sh.extra_slugs || []).filter(Boolean);
+      if (!slugs.length) return "";
+      const qs = "view=" + encodeURIComponent(sh.view || "shingle") +
+        "&style=" + encodeURIComponent(sh.style || "default") +
+        "&layout=" + encodeURIComponent(sh.layout || "row") + "&allowedcolors=";
+      return '<div class="shingle-embed">' + slugs.map((s) =>
+        '<iframe class="ocframe" id="ocframe-' + (++ocFrameSeq) +
+        '" src="https://www.owenscorning.com/en-us/public_widgets/shingle/' + encodeURIComponent(s) + "?" + qs +
+        '" loading="lazy" title="Owens Corning shingle colors"></iframe>').join("") +
+        '<div class="se-note">Scroll the swatches to browse every available color.</div></div>';
+    }
+
+    // OC widget pages run the standard iframe-resizer child: they announce
+    // "[iFrameResizerChild]Ready", we reply with an init message, and they then
+    // post "[iFrameSizer]<id>:<height>:<width>:<event>" whenever content
+    // resizes. The CSS heights stay as a graceful fallback.
+    window.addEventListener("message", (e) => {
+      if (String(e.origin).indexOf("owenscorning.com") < 0 || typeof e.data !== "string") return;
+      if (e.data.indexOf("[iFrameResizerChild]Ready") === 0) {
+        document.querySelectorAll("iframe.ocframe").forEach((f) => {
+          if (f.contentWindow === e.source) f.contentWindow.postMessage("[iFrameSizer]" + f.id + ":8:false", "*");
+        });
+        return;
+      }
+      if (e.data.indexOf("[iFrameSizer]") !== 0) return;
+      const p = e.data.slice(13).split(":");
+      const f = document.getElementById(p[0]);
+      const h = parseInt(p[1], 10);
+      if (f && h > 40) f.style.height = Math.min(h + 6, 1100) + "px";
+    });
+
     function renderReport(rep, firstName) {
+      reportData = rep;
       const c = rep.confidence || {}, q = rep.quote || {}, pr = q.price_range || {};
-      const snap = rep.roof_snapshot || {}, sum = rep.ai_summary || {}, pe = rep.price_explanation || {};
-      const rh = rep.roof_health || {}, se = rep.storm_exposure || {}, nx = rep.recommended_next_step || {};
+      const nx = rep.recommended_next_step || {};
       const left = [], right = [], full = [];   // desktop two-column layout
 
       // Header (full width, above the columns)
@@ -514,72 +595,127 @@
         "<h2>" + (firstName ? esc2(firstName) + ", your" : "Your") + " Roof Intelligence Report is Ready</h2>" +
         "<p>" + esc2((rep.brand && rep.brand.subheadline) || "") + "</p></div>";
 
-      // LEFT: estimate range, snapshot, AI summary, reliability, why this estimate
+      // LEFT: the estimate range (everything else lives in the packages + CTA)
       left.push('<div class="headline-range"><div class="label">Your estimated roof replacement</div>' +
         '<div class="big">' + esc2(pr.display || "Estimate pending inspection") + "</div>" +
         '<div class="addr">' + esc2((rep.property && rep.property.address) || foundAddress || "") + "</div>" +
         '<div class="confline" style="margin-top:12px"><span class="conf-badge ' + confClass(c) + '">' +
         esc2((c.label || "Estimate Confidence") + ": " + (c.headline || "")) + "</span>" +
         '<span style="color:var(--muted);font-size:14px">Expected pricing accuracy ' + esc2(c.accuracy_text || "") + "</span></div></div>");
-      const fin = rep.financing;
-      if (fin && fin.text) left.push('<div class="rsection" style="text-align:center"><h3 style="margin:0;color:var(--nsr-blue)">' + esc2(fin.text) + "</h3></div>");
       const sa = rep.service_area;
       if (sa && sa.in_area === false && sa.message) left.push('<div class="rsection"><p>' + esc2(sa.message) + "</p></div>");
-      const cards = [];
-      if (snap.total_sloped_sqft) cards.push(["~" + snap.total_sloped_sqft.toLocaleString() + " ft²", "Roof area"]);
-      if (snap.total_squares) cards.push([Math.round(snap.total_squares) + " sq", "Roofing squares"]);
-      if (snap.predominant_pitch) cards.push([snap.predominant_pitch, "Pitch"]);
-      if (snap.structure_complexity) cards.push([snap.structure_complexity, "Complexity"]);
-      if (snap.facet_count) cards.push([snap.facet_count, "Roof faces"]);
-      if (cards.length) left.push('<div class="rsection"><h3>Roof snapshot</h3><div class="meta-row">' +
-        cards.map(([v, l]) => '<div class="meta"><div class="v">' + esc2(v) + '</div><div class="l">' + esc2(l) + "</div></div>").join("") + "</div></div>");
-      // Property details (ATTOM enrichment)
-      const pd = rep.property_details;
-      if (pd) {
-        const pcards = [];
-        if (pd.year_built) pcards.push([pd.year_built, "Year built"]);
-        if (pd.building_sqft) pcards.push(["~" + Number(pd.building_sqft).toLocaleString() + " ft²", "Home size"]);
-        if (pd.stories) pcards.push([pd.stories, "Stories"]);
-        if (pd.roof_cover) pcards.push([pd.roof_cover, "Roof material"]);
-        if (pcards.length) left.push('<div class="rsection"><h3>Property details</h3><div class="meta-row">' +
-          pcards.map(([v, l]) => '<div class="meta"><div class="v">' + esc2(v) + '</div><div class="l">' + esc2(l) + "</div></div>").join("") +
-          '</div><p style="color:var(--muted);font-size:11px;margin-top:8px">Source: ATTOM property data</p></div>');
-      }
-      if (sum.text) left.push('<div class="rsection"><h3>AI summary</h3><p class="ai-text">' + esc2(sum.text) + "</p></div>");
-      if (c.message) left.push('<div class="rsection"><h3>' + esc2(c.label || "Estimate Confidence") + " — " + esc2(c.level || "") + "</h3><p>" + esc2(c.message) + "</p></div>");
-      if (pe.drivers && pe.drivers.length) left.push('<div class="rsection"><h3>' + esc2(pe.headline || "Why this estimate?") + "</h3><p style=\"margin-bottom:10px\">" + esc2(pe.basis || "") + "</p>" +
-        pe.drivers.map((d) => '<div class="driver"><div class="dlabel">' + esc2(d.label) + '</div><div class="dval">' + esc2(d.value) + '</div><div class="dnote">' + esc2(d.note || "") + "</div></div>").join("") + "</div>");
 
-      // RIGHT: package options, then the inspection CTA card
-      if (q.estimates && q.estimates.length) right.push('<div><div class="section-title" style="margin-top:0">Your package options</div><div class="tiers">' +
-        q.estimates.map((t) => { const f = t.key === "better"; return '<div class="tier' + (f ? " featured" : "") + '">' + (f ? '<span class="pop">Most popular</span>' : "") +
+      // FEATURED (full width, right under the header): package options as tabs,
+      // Best selected by default. Package info left, big OC color widget right.
+      let packagesHTML = "";
+      if (q.estimates && q.estimates.length) {
+        const defaultKey = q.estimates.some((t) => t.key === "best") ? "best" : q.estimates[q.estimates.length - 1].key;
+        const tabs = '<div class="tier-tabs" role="tablist">' + q.estimates.map((t) =>
+          '<button type="button" class="tier-tab' + (t.key === defaultKey ? " active" : "") + '" data-k="' + esc2(t.key) +
+          '" role="tab" aria-selected="' + (t.key === defaultKey) + '">' + esc2(t.name) + "</button>").join("") + "</div>";
+        const panels = q.estimates.map((t) => { const f = t.key === "better";
+          const badges = (t.badges && t.badges.length) ? t.badges : (f ? [{ label: "Most popular", tone: "popular" }] : []);
+          const chips = badges.length ? '<div class="badges">' + badges.map((b) =>
+            '<span class="badge-chip badge-' + (BADGE_TONES.indexOf(b.tone) >= 0 ? b.tone : "recommended") + '">' + esc2(b.label) + "</span>").join("") + "</div>" : "";
+          return '<div class="tier-panel' + (t.key === defaultKey ? " show" : "") + '" data-k="' + esc2(t.key) + '" role="tabpanel">' +
+          '<div class="tier' + (f ? " featured" : "") + '"><div class="tier-info">' + chips +
           "<h3>" + esc2(t.name) + "</h3><div class=\"blurb\">" + esc2(t.blurb) + "</div><div class=\"price\">" + esc2(t.price_display) + "</div>" +
           '<div class="persq">' + (t.price_per_square ? "~$" + t.price_per_square.toLocaleString() + " / square installed" : "") + "</div>" +
-          "<ul>" + (t.features || []).map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul></div>"; }).join("") + "</div></div>");
+          "<ul>" + (t.features || []).map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul>" +
+          (t.warranty ? '<div class="warranty-line"><b>Warranty:</b> ' + esc2(t.warranty) + "</div>" : "") +
+          '<button type="button" class="select-pkg" data-k="' + esc2(t.key) + '" data-name="' + esc2(t.name) + '">Select the ' + esc2(t.name) + " package</button>" +
+          "</div>" + shingleEmbed(t.shingle) +
+          '<div class="tier-finance"><div class="tf-head">Flexible monthly payments</div>' +
+          '<iframe id="hearth-widget_calculator_' + esc2(t.key) + '" title="Hearth financing calculator"></iframe></div>' +
+          "</div></div>"; }).join("");
+        packagesHTML = '<div class="packages-wide"><div class="section-title" style="margin-top:0">Your package options</div>' + tabs + panels + "</div>";
+      }
       const cta = nx.cta_label || "Schedule Free Roof Verification";
       const checklist = (nx.checklist || []).map((x) => '<div class="vcheck"><b>✓</b>' + esc2(x) + "</div>").join("");
       const btn = '<a class="btn" href="' + esc2(BOOKING_URL) + '" target="_blank" rel="noopener">' + esc2(cta) + "</a>";
       right.push('<div class="verify">' + '<h3>' + esc2(nx.headline || "Your estimate is ready") + "</h3><p>" + esc2(nx.body || "") + "</p>" +
-        (checklist ? '<div class="vchecklist">' + checklist + "</div>" : "") + btn +
+        (checklist ? '<div class="vchecklist">' + checklist + "</div>" : "") +
+        '<div class="selected-pkg-note" id="selectedPkg" style="display:none"></div>' + btn +
         (nx.free_no_obligation ? '<p style="margin-top:12px;font-size:13px">' + esc2(nx.free_no_obligation) + "</p>" : "") + "</div>");
       if (rep.proposal_url) right.push('<div class="verify" style="padding:18px"><p style="margin:0 0 12px">Get your full branded proposal to review and sign.</p>' +
         '<a class="btn" href="' + esc2(rep.proposal_url) + '" target="_blank" rel="noopener">Download Your Proposal (PDF)</a></div>');
 
-      // FULL WIDTH: verification details + storm review + disclaimer
-      full.push('<div class="rsection"><h3>' + esc2(rh.headline || "What we'll verify during your free roof assessment") + "</h3><p>" + esc2(rh.message || "") + "</p>" +
-        (rh.checklist ? '<ul class="checklist">' + rh.checklist.map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul>" : "") + "</div>");
-      full.push('<div class="rsection"><h3>' + esc2(se.headline || "Storm & damage review") + "</h3><p>" + esc2(se.message || "") + "</p></div>");
+      // FULL WIDTH: OC warranty + verification details + storm review + disclaimer
+      full.push('<div class="rsection oc-warranty"><h3>Owens Corning Preferred Protection Warranty</h3>' +
+        '<img src="/assets/oc-preferred-protection.png" alt="Owens Corning Preferred Protection Limited Warranty" loading="lazy" />' +
+        '<p>As an Owens Corning Preferred Contractor, New Standard Restoration can register your new roof for the ' +
+        'Preferred Protection Limited Warranty — non-prorated material coverage plus our own labor warranty.</p>' +
+        '<iframe class="ocframe" id="ocframe-warranty" src="https://www.owenscorning.com/en-us/public_widgets/warranty?preferredProtection=true" loading="lazy" title="Owens Corning warranty coverage"></iframe></div>');
       if (rep.disclaimer) full.push('<p class="disclaimer">' + esc2(rep.disclaimer) + "</p>");
 
-      $("report").innerHTML = hero +
+      $("report").innerHTML = hero + packagesHTML +
         '<div class="report-grid"><div class="report-left">' + left.join("") + "</div>" +
         '<div class="report-right">' + right.join("") + "</div></div>" +
         '<div class="report-full">' + full.join("") + "</div>";
+      initHearth();
+    }
+
+    // Email the team when a package is chosen (fire-and-forget, once per
+    // package). Deliberately NOT a CRM update — /api/select emails only.
+    function notifySelection(key, name) {
+      if (!leadInfo || key === lastSelectionSent) return;
+      lastSelectionSent = key;
+      const est = ((reportData && reportData.quote && reportData.quote.estimates) || [])
+        .find((t) => t.key === key) || {};
+      const proposal = reportData && reportData.proposal_url
+        ? new URL(reportData.proposal_url, location.origin).href : "";
+      fetch("/api/select", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: leadInfo.first_name, last_name: leadInfo.last_name,
+          email: leadInfo.email, phone: leadInfo.phone, address: leadInfo.address,
+          package_key: key, package_name: name,
+          price_display: est.price_display || "",
+          shingle_name: (est.shingle && est.shingle.name) || "",
+          proposal_url: proposal,
+        }),
+      }).catch(() => {});
+    }
+
+    // Hearth financing calculator — their loader initializes every
+    // [id^=hearth-widget_] iframe and runs immediately when injected after page
+    // load, so (re)append the script AFTER the report exists in the DOM.
+    function initHearth() {
+      if (!document.querySelector('iframe[id^="hearth-widget_"]')) return;
+      const old = document.getElementById("hearth-script");
+      if (old) old.remove();
+      const s = document.createElement("script");
+      s.src = "https://widget.gethearth.com/script.js";
+      s.id = "hearth-script";
+      s.dataset.orgid = "49031";
+      s.dataset.partner = "new-standard-restoration";
+      document.body.appendChild(s);
     }
 
     // ---- wiring ----
     $("addressForm").addEventListener("submit", (e) => { e.preventDefault(); runPreview(); });
     $("unlockForm").addEventListener("submit", (e) => { e.preventDefault(); unlock(); });
+    // Package tabs + package selection (delegated — #report's innerHTML is replaced per render).
+    $("report").addEventListener("click", (e) => {
+      const sel = e.target.closest(".select-pkg");
+      if (sel) {
+        document.querySelectorAll(".select-pkg").forEach((b) => {
+          b.classList.toggle("selected", b === sel);
+          b.textContent = b === sel ? "✓ " + b.dataset.name + " package selected" : "Select the " + b.dataset.name + " package";
+        });
+        const note = $("selectedPkg");
+        if (note) { note.style.display = "block"; note.innerHTML = "Package selected: <b>" + esc2(sel.dataset.name) + "</b>"; }
+        const link = document.querySelector(".verify a.btn");
+        if (link) { try { const u = new URL(BOOKING_URL); u.searchParams.set("package", sel.dataset.k); link.href = u.toString(); } catch (_) {} }
+        notifySelection(sel.dataset.k, sel.dataset.name);
+        return;
+      }
+      const btn = e.target.closest(".tier-tab");
+      if (!btn) return;
+      const tabs = btn.closest(".tier-tabs");
+      tabs.querySelectorAll(".tier-tab").forEach((t) => { t.classList.toggle("active", t === btn); t.setAttribute("aria-selected", t === btn); });
+      tabs.parentElement.querySelectorAll(".tier-panel").forEach((p) => p.classList.toggle("show", p.dataset.k === btn.dataset.k));
+    });
 
     // ---------- Address autocomplete: Google Places (server-suggest fallback) ----------
     const addr = $("address");
