@@ -574,7 +574,6 @@
 
     function renderReport(rep, firstName) {
       const c = rep.confidence || {}, q = rep.quote || {}, pr = q.price_range || {};
-      const snap = rep.roof_snapshot || {}, sum = rep.ai_summary || {}, pe = rep.price_explanation || {};
       const rh = rep.roof_health || {}, se = rep.storm_exposure || {}, nx = rep.recommended_next_step || {};
       const left = [], right = [], full = [];   // desktop two-column layout
 
@@ -583,41 +582,15 @@
         "<h2>" + (firstName ? esc2(firstName) + ", your" : "Your") + " Roof Intelligence Report is Ready</h2>" +
         "<p>" + esc2((rep.brand && rep.brand.subheadline) || "") + "</p></div>";
 
-      // LEFT: estimate range, snapshot, AI summary, reliability, why this estimate
+      // LEFT: the estimate range (everything else lives in the packages + CTA)
       left.push('<div class="headline-range"><div class="label">Your estimated roof replacement</div>' +
         '<div class="big">' + esc2(pr.display || "Estimate pending inspection") + "</div>" +
         '<div class="addr">' + esc2((rep.property && rep.property.address) || foundAddress || "") + "</div>" +
         '<div class="confline" style="margin-top:12px"><span class="conf-badge ' + confClass(c) + '">' +
         esc2((c.label || "Estimate Confidence") + ": " + (c.headline || "")) + "</span>" +
         '<span style="color:var(--muted);font-size:14px">Expected pricing accuracy ' + esc2(c.accuracy_text || "") + "</span></div></div>");
-      const fin = rep.financing;
-      if (fin && fin.text) left.push('<div class="rsection" style="text-align:center"><h3 style="margin:0;color:var(--nsr-blue)">' + esc2(fin.text) + "</h3></div>");
       const sa = rep.service_area;
       if (sa && sa.in_area === false && sa.message) left.push('<div class="rsection"><p>' + esc2(sa.message) + "</p></div>");
-      const cards = [];
-      if (snap.total_sloped_sqft) cards.push(["~" + snap.total_sloped_sqft.toLocaleString() + " ft²", "Roof area"]);
-      if (snap.total_squares) cards.push([Math.round(snap.total_squares) + " sq", "Roofing squares"]);
-      if (snap.predominant_pitch) cards.push([snap.predominant_pitch, "Pitch"]);
-      if (snap.structure_complexity) cards.push([snap.structure_complexity, "Complexity"]);
-      if (snap.facet_count) cards.push([snap.facet_count, "Roof faces"]);
-      if (cards.length) left.push('<div class="rsection"><h3>Roof snapshot</h3><div class="meta-row">' +
-        cards.map(([v, l]) => '<div class="meta"><div class="v">' + esc2(v) + '</div><div class="l">' + esc2(l) + "</div></div>").join("") + "</div></div>");
-      // Property details (ATTOM enrichment)
-      const pd = rep.property_details;
-      if (pd) {
-        const pcards = [];
-        if (pd.year_built) pcards.push([pd.year_built, "Year built"]);
-        if (pd.building_sqft) pcards.push(["~" + Number(pd.building_sqft).toLocaleString() + " ft²", "Home size"]);
-        if (pd.stories) pcards.push([pd.stories, "Stories"]);
-        if (pd.roof_cover) pcards.push([pd.roof_cover, "Roof material"]);
-        if (pcards.length) left.push('<div class="rsection"><h3>Property details</h3><div class="meta-row">' +
-          pcards.map(([v, l]) => '<div class="meta"><div class="v">' + esc2(v) + '</div><div class="l">' + esc2(l) + "</div></div>").join("") +
-          '</div><p style="color:var(--muted);font-size:11px;margin-top:8px">Source: ATTOM property data</p></div>');
-      }
-      if (sum.text) left.push('<div class="rsection"><h3>AI summary</h3><p class="ai-text">' + esc2(sum.text) + "</p></div>");
-      if (c.message) left.push('<div class="rsection"><h3>' + esc2(c.label || "Estimate Confidence") + " — " + esc2(c.level || "") + "</h3><p>" + esc2(c.message) + "</p></div>");
-      if (pe.drivers && pe.drivers.length) left.push('<div class="rsection"><h3>' + esc2(pe.headline || "Why this estimate?") + "</h3><p style=\"margin-bottom:10px\">" + esc2(pe.basis || "") + "</p>" +
-        pe.drivers.map((d) => '<div class="driver"><div class="dlabel">' + esc2(d.label) + '</div><div class="dval">' + esc2(d.value) + '</div><div class="dnote">' + esc2(d.note || "") + "</div></div>").join("") + "</div>");
 
       // FEATURED (full width, right under the header): package options as tabs,
       // Best selected by default. Package info left, big OC color widget right.
