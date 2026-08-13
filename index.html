@@ -137,7 +137,13 @@
     .notes { margin: 12px 0 0; font-size: 13.5px; } .notes li { margin: 3px 0; }
     .notes .reason::marker { color: var(--ok); } .notes .warn::marker { color: var(--warn); }
     .section-title { margin: 26px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: var(--nsr-blue); font-weight: 700; }
-    .tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    /* Good / Better / Best as tabs — one package visible at a time */
+    .tier-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tier-tab { flex: 1; padding: 11px 8px; font-family: inherit; font-weight: 800; font-size: 14px; letter-spacing: .02em; color: var(--muted); background: var(--charcoal); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+    .tier-tab:hover { color: var(--text); border-color: var(--nsr-blue); }
+    .tier-tab.active { color: #031019; background: linear-gradient(180deg, #51C5F4, #1597d4); border-color: transparent; }
+    .tier-panel { display: none; }
+    .tier-panel.show { display: block; }
     .tier { padding: 20px; display: flex; flex-direction: column; }
     .tier.featured { border-color: var(--nsr-blue); box-shadow: 0 0 0 1px var(--nsr-blue) inset; }
     .tier .pop { align-self: flex-start; font-size: 11px; font-weight: 800; text-transform: uppercase; color: var(--nsr-blue); background: rgba(81,197,244,.14); border-radius: 999px; padding: 3px 9px; margin-bottom: 8px; }
@@ -180,7 +186,6 @@
     .report-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 18px; align-items: start; margin-top: 16px; }
     .report-left, .report-right { display: grid; gap: 16px; align-content: start; }
     .report-left > *, .report-right > * { margin: 0 !important; }
-    .report-right .tiers { grid-template-columns: 1fr; }   /* Good/Better/Best stacked */
     .report-full { display: grid; gap: 16px; margin-top: 18px; }
     .report-full > * { margin: 0 !important; }
     @media (max-width: 880px) { #result { max-width: 760px; } .report-grid { grid-template-columns: 1fr; } }
@@ -610,19 +615,26 @@
       if (pe.drivers && pe.drivers.length) left.push('<div class="rsection"><h3>' + esc2(pe.headline || "Why this estimate?") + "</h3><p style=\"margin-bottom:10px\">" + esc2(pe.basis || "") + "</p>" +
         pe.drivers.map((d) => '<div class="driver"><div class="dlabel">' + esc2(d.label) + '</div><div class="dval">' + esc2(d.value) + '</div><div class="dnote">' + esc2(d.note || "") + "</div></div>").join("") + "</div>");
 
-      // RIGHT: package options (OC shingle widget + badges + warranty), then the inspection CTA card
-      if (q.estimates && q.estimates.length) right.push('<div><div class="section-title" style="margin-top:0">Your package options</div><div class="tiers">' +
-        q.estimates.map((t) => { const f = t.key === "better";
+      // RIGHT: package options as tabs (Best selected by default), then the inspection CTA card
+      if (q.estimates && q.estimates.length) {
+        const defaultKey = q.estimates.some((t) => t.key === "best") ? "best" : q.estimates[q.estimates.length - 1].key;
+        const tabs = '<div class="tier-tabs" role="tablist">' + q.estimates.map((t) =>
+          '<button type="button" class="tier-tab' + (t.key === defaultKey ? " active" : "") + '" data-k="' + esc2(t.key) +
+          '" role="tab" aria-selected="' + (t.key === defaultKey) + '">' + esc2(t.name) + "</button>").join("") + "</div>";
+        const panels = q.estimates.map((t) => { const f = t.key === "better";
           const badges = (t.badges && t.badges.length) ? t.badges : (f ? [{ label: "Most popular", tone: "popular" }] : []);
           const chips = badges.length ? '<div class="badges">' + badges.map((b) =>
             '<span class="badge-chip badge-' + (BADGE_TONES.indexOf(b.tone) >= 0 ? b.tone : "recommended") + '">' + esc2(b.label) + "</span>").join("") + "</div>" : "";
-          return '<div class="tier' + (f ? " featured" : "") + '">' + chips +
+          return '<div class="tier-panel' + (t.key === defaultKey ? " show" : "") + '" data-k="' + esc2(t.key) + '" role="tabpanel">' +
+          '<div class="tier' + (f ? " featured" : "") + '">' + chips +
           "<h3>" + esc2(t.name) + "</h3><div class=\"blurb\">" + esc2(t.blurb) + "</div><div class=\"price\">" + esc2(t.price_display) + "</div>" +
           '<div class="persq">' + (t.price_per_square ? "~$" + t.price_per_square.toLocaleString() + " / square installed" : "") + "</div>" +
           "<ul>" + (t.features || []).map((x) => "<li>" + esc2(x) + "</li>").join("") + "</ul>" +
           shingleEmbed(t.shingle) +
           (t.warranty ? '<div class="warranty-line"><b>Warranty:</b> ' + esc2(t.warranty) + "</div>" : "") +
-          "</div>"; }).join("") + "</div></div>");
+          "</div></div>"; }).join("");
+        right.push('<div><div class="section-title" style="margin-top:0">Your package options</div>' + tabs + panels + "</div>");
+      }
       const cta = nx.cta_label || "Schedule Free Roof Verification";
       const checklist = (nx.checklist || []).map((x) => '<div class="vcheck"><b>✓</b>' + esc2(x) + "</div>").join("");
       const btn = '<a class="btn" href="' + esc2(BOOKING_URL) + '" target="_blank" rel="noopener">' + esc2(cta) + "</a>";
@@ -652,6 +664,14 @@
     // ---- wiring ----
     $("addressForm").addEventListener("submit", (e) => { e.preventDefault(); runPreview(); });
     $("unlockForm").addEventListener("submit", (e) => { e.preventDefault(); unlock(); });
+    // Package tabs (delegated — #report's innerHTML is replaced per render).
+    $("report").addEventListener("click", (e) => {
+      const btn = e.target.closest(".tier-tab");
+      if (!btn) return;
+      const tabs = btn.closest(".tier-tabs");
+      tabs.querySelectorAll(".tier-tab").forEach((t) => { t.classList.toggle("active", t === btn); t.setAttribute("aria-selected", t === btn); });
+      tabs.parentElement.querySelectorAll(".tier-panel").forEach((p) => p.classList.toggle("show", p.dataset.k === btn.dataset.k));
+    });
 
     // ---------- Address autocomplete: Google Places (server-suggest fallback) ----------
     const addr = $("address");
