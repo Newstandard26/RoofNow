@@ -441,6 +441,9 @@
 
     let foundAddress = null;   // normalized address from the preview (used for the lead)
     let selectedLoc = null;    // {lat, lng, description} once an autocomplete suggestion is picked
+    let leadInfo = null;       // contact details captured at unlock (for the selection email)
+    let reportData = null;     // last rendered report (estimates + proposal link)
+    let lastSelectionSent = null;  // package key of the last emailed selection
 
     // ---- Step 1: address -> preview ----
     async function runPreview() {
@@ -522,6 +525,7 @@
         const data = await r.json().catch(() => ({}));
         if (!r.ok) { $("unlockErr").textContent = (data.errors || [data.error || "Please check your details."]).join(" "); return; }
         hide($("status"));
+        leadInfo = body;
         if (data.report) {
           renderReport(data.report, body.first_name);
           hide($("teaser")); show($("result"));
@@ -581,6 +585,7 @@
     });
 
     function renderReport(rep, firstName) {
+      reportData = rep;
       const c = rep.confidence || {}, q = rep.quote || {}, pr = q.price_range || {};
       const nx = rep.recommended_next_step || {};
       const left = [], right = [], full = [];   // desktop two-column layout
@@ -650,6 +655,28 @@
       initHearth();
     }
 
+    // Email the team when a package is chosen (fire-and-forget, once per
+    // package). Deliberately NOT a CRM update — /api/select emails only.
+    function notifySelection(key, name) {
+      if (!leadInfo || key === lastSelectionSent) return;
+      lastSelectionSent = key;
+      const est = ((reportData && reportData.quote && reportData.quote.estimates) || [])
+        .find((t) => t.key === key) || {};
+      const proposal = reportData && reportData.proposal_url
+        ? new URL(reportData.proposal_url, location.origin).href : "";
+      fetch("/api/select", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: leadInfo.first_name, last_name: leadInfo.last_name,
+          email: leadInfo.email, phone: leadInfo.phone, address: leadInfo.address,
+          package_key: key, package_name: name,
+          price_display: est.price_display || "",
+          shingle_name: (est.shingle && est.shingle.name) || "",
+          proposal_url: proposal,
+        }),
+      }).catch(() => {});
+    }
+
     // Hearth financing calculator — their loader initializes every
     // [id^=hearth-widget_] iframe and runs immediately when injected after page
     // load, so (re)append the script AFTER the report exists in the DOM.
@@ -680,6 +707,7 @@
         if (note) { note.style.display = "block"; note.innerHTML = "Package selected: <b>" + esc2(sel.dataset.name) + "</b>"; }
         const link = document.querySelector(".verify a.btn");
         if (link) { try { const u = new URL(BOOKING_URL); u.searchParams.set("package", sel.dataset.k); link.href = u.toString(); } catch (_) {} }
+        notifySelection(sel.dataset.k, sel.dataset.name);
         return;
       }
       const btn = e.target.closest(".tier-tab");

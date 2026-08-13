@@ -12,6 +12,7 @@
     "api/property_report.py": { "includeFiles": "roofwall/**" },
     "api/proposal.py": { "includeFiles": "{roofwall/**,assets/nsr-logo*.png,assets/oc-preferred-protection.png}" },
     "api/lead.py": { "includeFiles": "roofwall/**" },
+    "api/select.py": { "includeFiles": "roofwall/**" },
     "api/admin/login.py": { "includeFiles": "roofwall/**" },
     "api/admin/pricing.py": { "includeFiles": "roofwall/**" }
   },

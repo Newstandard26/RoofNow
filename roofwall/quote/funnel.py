@@ -159,6 +159,44 @@ def build_email(lead: Dict[str, Any], quote: Optional[Dict[str, Any]] = None) ->
     return subject, body
 
 
+def build_selection_email(
+    lead: Dict[str, Any], selection: Dict[str, Any]
+) -> Tuple[str, str]:
+    """(subject, body) for the "customer picked a package" update email.
+
+    Sent when the homeowner clicks "Select the <name> package" on their quote
+    report. Deliberately email-only — the CRM record was already created at the
+    unlock step and is NOT updated for selections.
+    """
+    name = lead.get("name") or " ".join(
+        x for x in (lead.get("first_name"), lead.get("last_name")) if x) or "A homeowner"
+    pkg = selection.get("package_name") or str(selection.get("package_key") or "").title() or "a"
+    subject = f"RoofNow update: {name} selected the {pkg} package"
+    lines = [
+        f"{name} just chose a package on their RoofNow quote report.",
+        "",
+        f"Package:  {pkg}" + (f" ({selection['price_display']})" if selection.get("price_display") else ""),
+    ]
+    if selection.get("shingle_name"):
+        lines.append(f"Shingles: {selection['shingle_name']}")
+    lines += [
+        f"Name:     {name}",
+        f"Phone:    {lead.get('phone') or '—'}",
+        f"Email:    {lead.get('email') or '—'}",
+        f"Address:  {lead.get('address') or '—'}",
+    ]
+    if lead.get("proposal_url"):
+        lines.append(f"Proposal: {lead['proposal_url']}")
+    lines += ["", "They're warm — follow up to lock in the inspection."]
+    return subject, "\n".join(lines)
+
+
+def send_selection_email(lead: Dict[str, Any], selection: Dict[str, Any]) -> str:
+    """Email the team about a package selection. Best-effort; email sink only."""
+    subject, body = build_selection_email(lead, selection)
+    return _smtp_send(subject, body, reply_to=lead.get("email"))
+
+
 def build_slack_blocks(lead: Dict[str, Any], quote: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Slack Incoming Webhook payload (text + a tidy section block)."""
     summary = "\n".join(_summary_lines(lead, quote))
@@ -203,7 +241,8 @@ def _send_slack(lead: Dict[str, Any], quote: Optional[Dict[str, Any]]) -> str:
         return f"error: {exc}"
 
 
-def _send_email(lead: Dict[str, Any], quote: Optional[Dict[str, Any]]) -> str:
+def _smtp_send(subject: str, body: str, *, reply_to: Optional[str] = None) -> str:
+    """Send one plain-text email via the env-configured SMTP sink."""
     host = os.environ.get("SMTP_HOST")
     if not host:
         return "skipped"
@@ -214,13 +253,12 @@ def _send_email(lead: Dict[str, Any], quote: Optional[Dict[str, Any]]) -> str:
         to_addr = os.environ.get("LEAD_NOTIFY_TO", DEFAULT_NOTIFY_TO)
         from_addr = os.environ.get("LEAD_NOTIFY_FROM", user or to_addr)
 
-        subject, body = build_email(lead, quote)
         msg = EmailMessage()
         msg["Subject"] = subject
         msg["From"] = from_addr
         msg["To"] = to_addr
-        if lead.get("email"):
-            msg["Reply-To"] = lead["email"]
+        if reply_to:
+            msg["Reply-To"] = reply_to
         msg.set_content(body)
 
         with smtplib.SMTP(host, port, timeout=10) as server:
@@ -231,6 +269,11 @@ def _send_email(lead: Dict[str, Any], quote: Optional[Dict[str, Any]]) -> str:
         return "sent"
     except Exception as exc:  # noqa: BLE001
         return f"error: {exc}"
+
+
+def _send_email(lead: Dict[str, Any], quote: Optional[Dict[str, Any]]) -> str:
+    subject, body = build_email(lead, quote)
+    return _smtp_send(subject, body, reply_to=lead.get("email"))
 
 
 def funnel_lead(lead: Dict[str, Any], quote: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
